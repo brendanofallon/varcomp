@@ -1,6 +1,5 @@
 
 import subprocess
-import pysam
 import time
 
 def compress_vcf(input_vcf, conf):

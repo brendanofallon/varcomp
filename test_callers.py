@@ -1,14 +1,13 @@
-__author__ = 'bofallon'
 
+import argparse
+import ConfigParser as cp
+import callers
 import pysam
 import os
-import ConfigParser as cp
-import argparse
-import callers
-import time
 import bam_simulation
+import time
 import comparators
-
+import traceback as tb
 
 def process_variant(variant, results, conf):
     """
@@ -40,14 +39,15 @@ def process_variant(variant, results, conf):
         vars = variant_callers[caller](bam, ref_path, variant.chrom, variant.start-250, variant.start+250, conf)
         variants[caller] = vars
 
-    for method_name, comp in comparators.get_comparators().iteritems():
-        for caller, vars in variants.iteritems():
-            result = comp(orig_vcf, vars, conf)
-            print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + method_name + ": " + result
-            results[caller][method_name][result] += 1
+    vgraph_comp = comparators.get_comparators()['vgraph']
+    for caller, vars in variants.iteritems():
+        result = vgraph_comp(orig_vcf, vars, conf)
+        print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + ": " + result
+        results[caller][result] += 1
 
     os.chdir("..")
     os.system("rm -rf " + tmpdir)
+
 
 def process_vcf(input_vcf, conf):
     """
@@ -61,9 +61,7 @@ def process_vcf(input_vcf, conf):
     #Initialize results structure
     all_results = {}
     for caller_name in callers.get_callers():
-        all_results[caller_name] = {}
-        for method_name in comparators.get_comparators():
-            all_results[caller_name][method_name] = {
+        all_results[caller_name] = {
                 comparators.NO_VARS_FOUND_RESULT: 0,
                 comparators.NO_MATCH_RESULT: 0,
                 comparators.MATCH_RESULT: 0,
@@ -76,17 +74,19 @@ def process_vcf(input_vcf, conf):
             process_variant(input_var, all_results, conf)
         except Exception as ex:
             print "Error processing variant " + str(input_var) + " : " + str(ex)
+            tb.print_exc()
 
     for caller in all_results:
         print "Caller: " + caller
-        for method in all_results[caller]:
-            print "\t" + method
-            for result, count in all_results[caller][method].iteritems():
-                print "\t\t" + result + "\t:\t" + str(count)
+        for result, count in all_results[caller].iteritems():
+            print "\t\t" + result + "\t:\t" + str(count)
+
+
+
 
 
 if __name__=="__main__":
-    parser = argparse.ArgumentParser("Inject, simulate, call, compare")
+    parser = argparse.ArgumentParser("Test variant callers")
     parser.add_argument("-c", "--conf", help="Path to configuration file", default="./comp.conf")
     parser.add_argument("-v", "--vcf", help="Input vcf file")
     args = parser.parse_args()
