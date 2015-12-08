@@ -1,6 +1,5 @@
 
 import subprocess
-import pysam
 import time
 
 def compress_vcf(input_vcf, conf):
@@ -33,6 +32,11 @@ def call_variant_platypus(bam, orig_genome_path, contig, start, end, conf=None):
     #err.close()
     return compress_vcf(vcfoutput, conf)
 
+def call_wecall(bam, orig_genome_path, contig, start, end, conf=None):
+    vcfoutput = "output-wc.vcf"
+    cmd=conf.get('main', 'wecall_path') + " --refFile " + orig_genome_path + " --inputs " + bam + " --regions " + contig + ":" + str(start) + "-" + str(end) + " --output " + vcfoutput
+    subprocess.check_call(cmd, shell=True)
+    return compress_vcf(vcfoutput, conf)
 
 def call_variant_gatk_hc(bam, orig_genome_path, contig, start, end, conf=None):
     vcfoutput = "output-hc.vcf"
@@ -59,5 +63,6 @@ def get_callers():
         "freebayes": call_variant_fb,
         "platypus": call_variant_platypus,
         "rtg": call_variant_rtg,
-        "gatk-hc": call_variant_gatk_hc
+        "gatk-hc": call_variant_gatk_hc,
+        "wecall": call_wecall
     }
