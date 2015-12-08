@@ -65,7 +65,7 @@ def generate_reads(alt_genome_path, chr, pos, mean_coverage=250, prefix="test-re
 
 def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     dest = reads1.replace("_1.fq", "") + ".bam"
-    cmd = bwapath + " mem " + " -R '@RG\tID:test\tSM:sample\tPL:Illumina' " + ref_genome + " " + reads1 + " " + reads2 + " 2> /dev/null | " + samtoolspath + " sort -T sorttmp -O bam - > " + dest + "\n" + samtoolspath + " index " + dest + "\n"
+    cmd = bwapath + " mem " + " -R \"" + "\\t".join(['@RG', 'ID:test', 'SM:sample', 'PL:Illumina']) + "\" " + ref_genome + " " + reads1 + " " + reads2 + " 2> /dev/null | " + samtoolspath + " sort -T sorttmp -O bam - > " + dest + "\n" + samtoolspath + " index " + dest + "\n"
     script_path = "align.sh"
     with open(script_path, "w") as script_fh:
         script_fh.write(cmd)
@@ -181,4 +181,5 @@ if __name__=="__main__":
 
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
+
     process_vcf(args.vcf, conf)
