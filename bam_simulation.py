@@ -59,12 +59,12 @@ def generate_reads(alt_genome_path, chr, pos, mean_coverage=250, prefix="test-re
 
 def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     dest = reads1.replace("_1.fq", "") + ".bam"
-    cmd = bwapath + " mem " + " -R \"" + "\\t".join(['@RG', 'ID:test', 'SM:sample', 'PL:Illumina']) + "\" " + ref_genome + " " + reads1 + " " + reads2 + " 2> /dev/null | " + samtoolspath + " sort -T sorttmp -O bam - > " + dest + "\n" + samtoolspath + " index " + dest + "\n"
-    script_path = "align.sh"
+    cmd = bwapath + " mem " + " -R \'" + "\t".join(['@RG', 'ID:test', 'SM:sample', 'PL:Illumina']) + "\' " + ref_genome + " " + reads1 + " " + reads2 + " | " + samtoolspath + " sort -T sorttmp -O bam - > " + dest + "\n" + samtoolspath + " index " + dest + "\n"
+    script_path = "./align.sh"
     with open(script_path, "w") as script_fh:
         script_fh.write(cmd)
     os.chmod(script_path, 0755)
-    subprocess.check_call(["bash", script_path])
+    subprocess.check_call(script_path, shell=True)
     return dest
 
 def gen_alt_bam(ref_path, variant, conf):
