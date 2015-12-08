@@ -117,7 +117,7 @@ def compare_vgraph(orig_vcf, caller_vcf, conf):
     vg_cmd = conf.get('main', 'vgraph_path') + " --reference " + conf.get('main', 'ref_genome') + " " + orig_vcf + " " + caller_vcf
     cmd = [sys.executable]
     cmd.extend(vg_cmd.split())
-    result = subprocess.check_output(cmd, env=os.environ.copy())
+    result = subprocess.check_output(vg_cmd, env=os.environ.copy())
     if "MATCH!" in result:
         return MATCH_RESULT
     else:

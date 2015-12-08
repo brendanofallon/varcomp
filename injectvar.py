@@ -2,6 +2,7 @@ __author__ = 'bofallon'
 
 import pysam
 import os
+import sys
 import subprocess
 import json
 import ConfigParser as cp
@@ -9,6 +10,7 @@ import argparse
 import read_simulator as rs
 import callers
 import comparators
+import traceback as tb
 
 def gen_alt_genome(variant, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
     """
@@ -163,6 +165,7 @@ def process_vcf(input_vcf, conf):
             process_variant(input_var, all_results, conf)
         except Exception as ex:
             print "Error processing variant " + str(input_var) + " : " + str(ex)
+            tb.print_exc(file=sys.stdout)
 
     for caller in all_results:
         print "Caller: " + caller
