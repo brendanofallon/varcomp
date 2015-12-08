@@ -9,6 +9,7 @@ import ConfigParser as cp
 import argparse
 import read_simulator as rs
 import callers
+import time
 import comparators
 import traceback as tb
 
@@ -76,7 +77,6 @@ def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
 
 
 def write_vcf(variant, filename, conf, gt="1/1"):
-    print "Writing variant " + str(variant) + " to " + filename
     fh = open(filename, "w")
     fh.write("##fileformat=VCFv4.1\n")
     fh.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
@@ -105,11 +105,12 @@ def process_variant(variant, results, conf):
     :return:
     """
 
+    tmpdir = "tmp-working" + str(time.time())[-7:].replace(".", "")
     try:
-        os.mkdir("tmp-working")
+        os.mkdir(tmpdir)
     except:
         pass
-    os.chdir("tmp-working")
+    os.chdir(tmpdir)
 
     if len(variant.alts) != 1:
         raise ValueError("Only one alt per variant now")
@@ -136,7 +137,7 @@ def process_variant(variant, results, conf):
             results[caller][method_name][result] += 1
 
     os.chdir("..")
-    os.system("rm -rf tmp-working/")
+    os.system("rm -rf " + tmpdir)
 
 def process_vcf(input_vcf, conf):
     """
@@ -183,4 +184,5 @@ if __name__=="__main__":
 
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
+
     process_vcf(args.vcf, conf)
