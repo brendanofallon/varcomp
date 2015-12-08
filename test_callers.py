@@ -5,7 +5,8 @@ import callers
 import pysam
 import os
 import bam_simulation
-import time
+import random
+import string
 import comparators
 import traceback as tb
 
@@ -19,7 +20,7 @@ def process_variant(variant, results, conf):
     :return:
     """
 
-    tmpdir = "tmp-working" + str(time.time())[-7:].replace(".", "")
+    tmpdir = "tmp-working" + "".join([random.choice(string.ascii_uppercase + string.ascii_lowercase) for _ in range(8)])
     try:
         os.mkdir(tmpdir)
     except:
