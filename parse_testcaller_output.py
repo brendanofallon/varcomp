@@ -40,8 +40,8 @@ for caller in results:
 print "Totals by size / caller"
 
 for size in sorted(results_by_size.keys()):
-    print "Size: " + str(size)
+    print "\nSize: " + str(size)
     for caller in results_by_size[size]:
         counts = results_by_size[size][caller]
         percent = float(counts[0]) / (float(counts[0] + counts[1]))*100
-        print caller + "\t:\t" + str(counts[0]) + " / " + str(counts[0] + counts[1]) + "\t" + str(percent)[0:6] + "%"
+        print "" + caller + "".join([' ' for _ in range(max(0, 12-len(caller)))]) +  "\t:\t" + str(counts[0]) + " / " + str(counts[0] + counts[1]) + "\t" + str(percent)[0:6] + "%"

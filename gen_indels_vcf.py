@@ -35,8 +35,6 @@ def pick_location(regions):
     return (region[0], loc)
 
 def generate_all(ref, regions, output):
-
-
     reps_per_size = 10
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
@@ -44,8 +42,10 @@ def generate_all(ref, regions, output):
     for rep in range(0, reps_per_size):
         loc = pick_location(regions)
         for size in range(1, 150, 10):
-            deletion = gen_deletion(ref, loc[0], loc[1], size)
-            output.write(deletion + "\t" + "\t".join(['.', '.', '.']) + "\n")
+            #var = gen_deletion(ref, loc[0], loc[1], size)
+            #var = gen_insertion(ref, loc[0], loc[1], size)
+            var = gen_duplication(ref, loc[0], loc[1], size)
+            output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")
 
 
 if __name__=="__main__":
