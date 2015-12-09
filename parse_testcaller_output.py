@@ -31,17 +31,19 @@ for line in open(sys.argv[1], "r"):
             counts[1] += 1
             size_counts[1] += 1
 
-print "Totals by caller: "
+#print "Totals by caller: "
 for caller in results:
     counts = results[caller]
     percent = float(counts[0]) / (float(counts[0] + counts[1]))*100
-    print caller + "\t:\t" + str(counts[0]) + " / " + str(counts[0] + counts[1]) + "\t" + str(percent)[0:6] + "%"
+ #   print caller + "\t:\t" + str(counts[0]) + " / " + str(counts[0] + counts[1]) + "\t" + str(percent)[0:6] + "%"
 
-print "Totals by size / caller"
+#print "Totals by size / caller"
 
+print ",".join(["size", "caller", "hits", "attempts"])
 for size in sorted(results_by_size.keys()):
-    print "\nSize: " + str(size)
     for caller in results_by_size[size]:
         counts = results_by_size[size][caller]
         percent = float(counts[0]) / (float(counts[0] + counts[1]))*100
-        print "" + caller + "".join([' ' for _ in range(max(0, 12-len(caller)))]) +  "\t:\t" + str(counts[0]) + " / " + str(counts[0] + counts[1]) + "\t" + str(percent)[0:6] + "%"
+        #print "" + caller + "".join([' ' for _ in range(max(0, 12-len(caller)))]) +  "\t:\t" + str(counts[0]) + " / " + str(counts[0] + counts[1]) + "\t" + str(percent)[0:6] + "%"
+        print ",".join([str(size), caller, str(counts[0]), str(counts[0] + counts[1])])
+

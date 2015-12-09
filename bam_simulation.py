@@ -3,6 +3,8 @@ import pysam
 import read_simulator as rs
 import os
 import subprocess
+import random
+import string
 import callers
 
 def gen_alt_genome(variant, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
@@ -35,7 +37,7 @@ def gen_alt_genome(variant, orig_genome_path, dest_filename, overwrite=False, wi
     dest_index.close()
     return len(alt)
 
-def generate_reads(alt_genome_path, chr, pos, mean_coverage=250, prefix="test-reads"):
+def generate_reads(alt_genome_path, chr, pos, mean_coverage=250, prefix="test-reads", read1_fh=None, read2_fh=None):
     """
     Generate reads in fastq format from the altered genome, return paths to the files generated
     :param alt_genome_path:
@@ -46,14 +48,21 @@ def generate_reads(alt_genome_path, chr, pos, mean_coverage=250, prefix="test-re
     generator = rs.ReadSimulator(alt_genome_path, chr, pos)
     r1_filename = prefix + "_R1.fastq"
     r2_filename = prefix + "_R2.fastq"
-    a_output = open(r1_filename, "w")
-    b_output = open(r2_filename, "w")
+    close = False
+    if read1_fh is None:
+        read1_fh = open(r1_filename, "w")
+        close = True
+    if read2_fh is None:
+        read2_fh = open(r2_filename, "w")
+        close = True
+
     for x in range(mean_coverage):
         (a, b) = generator.gen_read_pair()
-        a_output.write(a + "\n")
-        b_output.write(b + "\n")
-    a_output.close()
-    b_output.close()
+        read1_fh.write(a + "\n")
+        read2_fh.write(b + "\n")
+    if close:
+        read1_fh.close()
+        read2_fh.close()
     return (r1_filename, r2_filename)
 
 
@@ -67,13 +76,21 @@ def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     subprocess.check_call(script_path, shell=True)
     return dest
 
-def gen_alt_bam(ref_path, variant, conf):
-    alt_genome_path = 'alt_genome.fa'
-    alt_genome_size = gen_alt_genome(variant, ref_path, alt_genome_path, overwrite=True)
-    (reads1, reads2) = generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, prefix='inputvar')
+def gen_alt_bam(ref_path, variants, conf):
+
+    reads1 = "input_r1.fq"
+    reads2 = "input_r2.fq"
+    read1_fh = open(reads1, "w")
+    read2_fh = open(reads2, "w")
+    for variant in variants:
+        alt_genome_path = 'alt_genome' + "".join([random.choice(string.ascii_lowercase + string.ascii_uppercase) for _ in range(10)]) + '.fa'
+        alt_genome_size = gen_alt_genome(variant, ref_path, alt_genome_path, overwrite=True)
+        generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, prefix='inputvar', read1_fh=read1_fh, read2_fh=read2_fh)
+
+    read1_fh.close()
+    read2_fh.close()
     bam = create_bam(ref_path, reads1, reads2, conf.get('main', 'bwa_path'), conf.get('main', 'samtools_path'))
     return bam
-
 
 def write_vcf(variant, filename, conf, gt="1/1"):
     fh = open(filename, "w")

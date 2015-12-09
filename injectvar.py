@@ -31,17 +31,16 @@ def process_variant(variant, results, conf):
         pass
     os.chdir(tmpdir)
 
-    if len(variant.alts) != 1:
-        raise ValueError("Only one alt per variant now")
     orig_vcf = bam_simulation.write_vcf(variant, "test_input.vcf", conf)
     ref_path = conf.get('main', 'ref_genome')
 
-    bam = bam_simulation.gen_alt_bam(ref_path, variant, conf)
+    bed = callers.vars_to_bed([variant])
+    bam = bam_simulation.gen_alt_bam(ref_path, [variant], conf)
 
     variant_callers = callers.get_callers()
     variants = {}
     for caller in variant_callers:
-        vars = variant_callers[caller](bam, ref_path, variant.chrom, variant.start-250, variant.start+250, conf)
+        vars = variant_callers[caller](bam, ref_path, bed, conf)
         variants[caller] = vars
 
     for method_name, comp in comparators.get_comparators().iteritems():
@@ -71,7 +70,8 @@ def process_vcf(input_vcf, conf):
                 comparators.NO_VARS_FOUND_RESULT: 0,
                 comparators.NO_MATCH_RESULT: 0,
                 comparators.MATCH_RESULT: 0,
-                comparators.PARTIAL_MATCH: 0
+                comparators.PARTIAL_MATCH: 0,
+                comparators.INCORRECT_GENOTYPE_RESULT: 0
             }
 
 
@@ -98,5 +98,4 @@ if __name__=="__main__":
 
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
-
     process_vcf(args.vcf, conf)

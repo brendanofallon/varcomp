@@ -29,6 +29,11 @@ def gen_duplication(ref, chr, location, size):
     alt = ref_bases + ref_bases
     return "\t".join([chr, str(location+1), ".", ref_bases, alt])
 
+def gen_inverse_dup(ref, chr, location, size):
+    ref_bases = ref.fetch(chr, location, location+size+1)
+    alt = ref_bases + revcomp(ref_bases)
+    return "\t".join([chr, str(location+1), ".", ref_bases, alt])
+
 def pick_location(regions):
     region = random.choice(regions)
     loc = random.randint(region[1], region[2])
@@ -44,9 +49,21 @@ def generate_all(ref, regions, output):
         for size in range(1, 150, 10):
             #var = gen_deletion(ref, loc[0], loc[1], size)
             #var = gen_insertion(ref, loc[0], loc[1], size)
-            var = gen_duplication(ref, loc[0], loc[1], size)
+            #var = gen_duplication(ref, loc[0], loc[1], size)
+            var = gen_inverse_dup(ref, loc[0], loc[1], size)
             output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")
 
+
+def revcomp(bases):
+    """
+    Return reverse-complemented bases, uses the revcomp_lookup global lookup dictionary
+    :return: Reverse-complemented bases as a string
+    """
+    result = []
+    revcomp_lookup={'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G' }
+    for b in bases[::-1]:
+        result.append(revcomp_lookup[b])
+    return "".join(result)
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser("Create a VCF file with many simulated indels")

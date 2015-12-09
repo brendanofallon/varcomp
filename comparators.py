@@ -7,6 +7,7 @@ import gzip
 
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
+INCORRECT_GENOTYPE_RESULT="Genotype mismatch"
 NO_MATCH_RESULT="Variants did not match"
 PARTIAL_MATCH="Partial variant match"
 
@@ -40,6 +41,12 @@ def compare_raw(orig_vars, caller_vars):
     if len(orig_vars)>0 and len(caller_vars) == 0:
         return NO_VARS_FOUND_RESULT
 
+    if len(caller_vars)>0 and len(orig_vars)>0:
+        caller_gt = get_first_gt(caller_vars[0])
+        orig_gt = get_first_gt(orig_vars[0])
+        if caller_gt != orig_gt:
+            return INCORRECT_GENOTYPE_RESULT
+
     #There are multiple input and/or output vars
     #For every input var, is there at least one match?
     matches = []
@@ -61,6 +68,18 @@ def compare_raw(orig_vars, caller_vars):
         return NO_MATCH_RESULT
     if len(matches)>0 and len(unmatched)>0:
         return PARTIAL_MATCH
+
+def get_first_gt(var):
+    """
+    Hack until we can get pysam to work..
+    :param var:
+    :return:
+    """
+    toks = str(var).split()
+    if len(toks) <= 9:
+        return None
+
+    return toks[9].split(":")[0]
 
 def compare_nonorm(orig_vcf, caller_vcf, conf=None):
     """
@@ -104,24 +123,34 @@ def compare_bcftools(orig_vcf, caller_vcf, conf):
     return compare_raw(normed_orig_vars, normed_caller_vars)
 
 
-def compare_vgraph(orig_vcf, caller_vcf, conf):
+def compare_vgraph(orig_vcf, caller_vcf, conf, bed=None):
     #Slightly tricky - must make sure executed python script is executed in a workable virtualenv. For now we
     #execute it in whatever virtual env this script is being processed in.
 
     #First, test to see if there are any vars present...
     orig_var_count = len(read_all_vars(orig_vcf))
-    caller_var_count = len(read_all_vars(caller_vcf))
+    caller_vars = read_all_vars(caller_vcf)
+    caller_var_count = len(caller_vars)
     if orig_var_count > 0 and caller_var_count == 0:
         return NO_VARS_FOUND_RESULT
 
-    vg_cmd = conf.get('main', 'vgraph_path') + " --reference " + conf.get('main', 'ref_genome') + " " + orig_vcf + " " + caller_vcf
+    gt = get_first_gt(caller_vars[0])
+    if gt != "1/1":
+        return INCORRECT_GENOTYPE_RESULT
+
+    bedcmd = ""
+    if bed is not None:
+        bedcmd = " -i " + bed
+    vg_cmd = conf.get('main', 'vgraph_path') + " --reference " + conf.get('main', 'ref_genome') + bedcmd + " " + orig_vcf + " " + caller_vcf
     cmd = [sys.executable]
     cmd.extend(vg_cmd.split())
     result = subprocess.check_output(cmd, env=os.environ.copy())
-    if "MATCH!" in result:
-        return MATCH_RESULT
-    else:
+    if "MISMATCH!" in result:
         return NO_MATCH_RESULT
+    elif "MATCH!" in result:
+        return MATCH_RESULT
+    return NO_MATCH_RESULT
+
 
 
 

@@ -11,6 +11,7 @@ revcomp_lookup={
     'G': 'C',
     'C': 'G'
 }
+
 class ReadSimulator(object):
 
     def __init__(self, ref_genome, target_chr, target_pos, mean_template_size=250, stdev_template_size=50, read_len=100):
@@ -24,13 +25,12 @@ class ReadSimulator(object):
         ref = pysam.FastaFile(ref_genome)
         self.seq = ref.fetch(target_chr, max(0, target_pos-self.flanking_bases), target_pos+self.flanking_bases)
         self.counter = 0
-        self.quals = "".join(['~' for x in range(self.read_len)])
+        self.quals = "".join(['Z' for x in range(self.read_len)])
 
     def gen_read_pair(self):
         """
         Generate a read pair and return a tuple of fastq-formatted strings suitable for writing to output files
         """
-
         template_pos = int(random.gauss(self.target_pos, self.target_pos_stdev ))
         #template_pos = int(random.gauss(len(self.seq)/2, self.target_pos_stdev ))
         template_size = int(random.gauss(self.mean_template_size, self.stdev_template_size))
