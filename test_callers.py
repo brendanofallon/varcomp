@@ -8,14 +8,6 @@ import bam_simulation
 import random
 import string
 import comparators
-import itertools
-
-
-# def find_variant_for_region(variants, chr, start, end):
-#     for var in variants:
-#         if var.chrom == chr and var.start >= start and var.start < end
-#             return var
-#     return None
 
 def process_variant(variant_batch, results, conf):
     """
@@ -68,28 +60,22 @@ def canadd(var, batch, min_safe_dist=1000, max_batch_size=10):
 def batch_variants(vars, max_batch_size=10):
     batches = []
     vars = list(vars)
-    batch = []
     while len(vars)>0:
         var = vars.pop(0)
-        if canadd(var, batch):
+        unfilled_batches = [b for b in batches if len(b)<max_batch_size]
+        found = False
+        for b in unfilled_batches:
+            if canadd(var, b):
+                b.append(var)
+                found = True
+                break
+
+        if not found:
+            print "Variant " + var.chrom + " " + str(var.start) + " " + var.ref + " " + var.alts[0] + " doesn't fit anywhere, making a new batch..."
+            batch = []
             batch.append(var)
-        else:
-            unfilled_batches = [b for b in batches if len(b)<max_batch_size]
-            found = False
-            for b in unfilled_batches:
-                if canadd(var, b):
-                    b.append(var)
-                    found = True
-                    break
+            batches.append(batch)
 
-            if not found:
-                print "Variant " + var.chrom + " " + str(var.start) + " " + var.ref + " " + var.alts[0] + " doesn't fit anywhere, making a new batch..."
-                batch = []
-                batch.append(var)
-                batches.append(batch)
-
-
-    batches.append(batch)
     return batches
 
 def var_sort(a, b):
@@ -126,12 +112,8 @@ def process_vcf(input_vcf, conf):
             print "  " + v.chrom + "\t" + str(v.start) + "\t" + str(v.ref) + "\t" + str(v.alts[0])
     for batch in batches:
         process_variant(sorted(batch, cmp=var_sort), all_results, conf)
-    # for input_var in input_vcf:
-        # try:
-        #     process_variant(input_var, all_results, conf)
-        # except Exception as ex:
-        #     print "Error processing variant " + str(input_var) + " : " + str(ex)
-        #     tb.print_exc()
+
+    assert sum([len(b) for b in batches]) == len(list(pysam.VariantFile(input_vcf)))
 
     for caller in all_results:
         print "Caller: " + caller
