@@ -57,7 +57,7 @@ def process_variant(variant_batch, results, conf):
     os.chdir("..")
     os.system("rm -rf " + tmpdir)
 
-def canadd(var, batch, min_safe_dist=1000, max_batch_size=10):
+def canadd(var, batch, max_batch_size, min_safe_dist=1000):
     if len(batch)>=max_batch_size:
         return False
     for b in batch:
@@ -65,29 +65,27 @@ def canadd(var, batch, min_safe_dist=1000, max_batch_size=10):
             return False
     return True
 
-def batch_variants(vars, max_batch_size=10):
+def batch_variants(vars, max_batch_size=3):
     batches = []
     vars = list(vars)
     batch = []
     while len(vars)>0:
         var = vars.pop(0)
-        if canadd(var, batch):
+        if canadd(var, batch, max_batch_size):
             batch.append(var)
         else:
             unfilled_batches = [b for b in batches if len(b)<max_batch_size]
             found = False
             for b in unfilled_batches:
-                if canadd(var, b):
+                if canadd(var, b, max_batch_size):
                     b.append(var)
                     found = True
                     break
 
             if not found:
-                print "Variant " + var.chrom + " " + str(var.start) + " " + var.ref + " " + var.alts[0] + " doesn't fit anywhere, making a new batch..."
                 batch = []
                 batch.append(var)
                 batches.append(batch)
-
 
     batches.append(batch)
     return batches
