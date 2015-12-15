@@ -3,7 +3,7 @@ import pysam
 import subprocess
 import sys
 import os
-import gzip
+import ConfigParser as cp
 
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
@@ -11,16 +11,29 @@ INCORRECT_GENOTYPE_RESULT="Genotype mismatch"
 NO_MATCH_RESULT="Variants did not match"
 PARTIAL_MATCH="Partial variant match"
 
-def read_all_vars(vcf):
+def read_all_vars(vcf, bed=None):
     """
     Try to read all the variants from th egiven vcf file into a list. If there's an error
     reading the vcf, return an empty list
-    :param vcf:
+    :param vcf:VCF to read variants from
+    :param bed:If not none, only read variants in these regions
     :return:
     """
     vars = []
     try:
-        vars = list(pysam.VariantFile(vcf))
+        if bed is None:
+            vars = list(pysam.VariantFile(vcf))
+        else:
+            vfh = pysam.VariantFile(vcf)
+            for line in open(bed, "r"):
+                line = line.strip()
+                if len(line)==0 or line[0]=='#':
+                    continue
+                toks = line.split()
+                chr = toks[0]
+                reg_start = int(toks[1])
+                reg_end = int(toks[2])
+                vars.extend(list(vfh.fetch(chr, reg_start, reg_end)))
     except:
         pass
     return vars
@@ -128,8 +141,8 @@ def compare_vgraph(orig_vcf, caller_vcf, conf, bed=None):
     #execute it in whatever virtual env this script is being processed in.
 
     #First, test to see if there are any vars present...
-    orig_var_count = len(read_all_vars(orig_vcf))
-    caller_vars = read_all_vars(caller_vcf)
+    orig_var_count = len(read_all_vars(orig_vcf, bed))
+    caller_vars = read_all_vars(caller_vcf, bed)
     caller_var_count = len(caller_vars)
     if orig_var_count > 0 and caller_var_count == 0:
         return NO_VARS_FOUND_RESULT
@@ -161,3 +174,9 @@ def get_comparators():
         "bcftools": compare_bcftools,
         "vgraph": compare_vgraph
     }
+
+
+if __name__=="__main__":
+    conf = cp.SafeConfigParser()
+    conf.read("comp.conf")
+    compare_vgraph("tmp-workingRPVTKsVf/test2.vcf.gz", "tmp-workingRPVTKsVf/output-fb.vcf.gz", conf, "tmp-workingRPVTKsVf/var_regionsFoTUZUhjvJ.bed")

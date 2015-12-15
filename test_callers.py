@@ -47,7 +47,7 @@ def process_variant(variant_batch, results, conf):
             results[caller][result] += 1
 
     os.chdir("..")
-    os.system("rm -rf " + tmpdir)
+    #os.system("rm -rf " + tmpdir)
 
 def canadd(var, batch, min_safe_dist=1000, max_batch_size=10):
     if len(batch)>=max_batch_size:
@@ -71,7 +71,6 @@ def batch_variants(vars, max_batch_size=10):
                 break
 
         if not found:
-            print "Variant " + var.chrom + " " + str(var.start) + " " + var.ref + " " + var.alts[0] + " doesn't fit anywhere, making a new batch..."
             batch = []
             batch.append(var)
             batches.append(batch)
@@ -112,6 +111,7 @@ def process_vcf(input_vcf, conf):
             print "  " + v.chrom + "\t" + str(v.start) + "\t" + str(v.ref) + "\t" + str(v.alts[0])
     for batch in batches:
         process_variant(sorted(batch, cmp=var_sort), all_results, conf)
+        exit(1)
 
     assert sum([len(b) for b in batches]) == len(list(pysam.VariantFile(input_vcf)))
 
