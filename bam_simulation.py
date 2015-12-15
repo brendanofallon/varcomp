@@ -6,6 +6,8 @@ import subprocess
 import random
 import string
 import callers
+import ConfigParser as cp
+import gzip
 
 def gen_alt_genome(variant, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
     """
@@ -37,11 +39,11 @@ def gen_alt_genome(variant, orig_genome_path, dest_filename, overwrite=False, wi
     dest_index.close()
     return len(alt)
 
-def generate_reads(alt_genome_path, chr, pos, mean_coverage=250, prefix="test-reads", read1_fh=None, read2_fh=None):
+def generate_reads(alt_genome_path, chr, pos, read_count=250, prefix="test-reads", read1_fh=None, read2_fh=None):
     """
     Generate reads in fastq format from the altered genome, return paths to the files generated
     :param alt_genome_path:
-    :param mean_coverage: Approx (very) mean coverage
+    :param read_count: Total number of read pairs to generate
     :param prefix: filename prefix for output files
     :return:
     """
@@ -56,7 +58,7 @@ def generate_reads(alt_genome_path, chr, pos, mean_coverage=250, prefix="test-re
         read2_fh = open(r2_filename, "w")
         close = True
 
-    for x in range(mean_coverage):
+    for x in range(read_count):
         (a, b) = generator.gen_read_pair()
         read1_fh.write(a + "\n")
         read2_fh.write(b + "\n")
@@ -90,7 +92,21 @@ def gen_alt_bam(ref_path, variants, conf):
     read1_fh.close()
     read2_fh.close()
     bam = create_bam(ref_path, reads1, reads2, conf.get('main', 'bwa_path'), conf.get('main', 'samtools_path'))
+    verify_reads(reads1, reads2, bam, conf)
     return bam
+
+def verify_reads(fq1, fq2, bam, conf):
+    """
+    Verify that all reads in the input fastq file are present in the bam file
+    """
+    r1 = len(list([line for line in open(fq1, "r") if line.strip()=='+']))
+    r2 = len(list([line for line in open(fq2, "r") if line.strip()=='+']))
+    cmd = conf.get('main', 'samtools_path') + " flagstat " + bam
+    info = subprocess.check_output(cmd, shell=True, executable="/bin/bash")
+    tot_line = info.split('\n')[0]
+    bc = int(tot_line.split(' ')[0])
+    if (r1 + r2) > bc:
+        raise ValueError("BAM does not have same number of reads as input fastqs")
 
 def write_vcf(variant, filename, conf, gt="1/1"):
     fh = open(filename, "w")
@@ -109,3 +125,10 @@ def write_vcf(variant, filename, conf, gt="1/1"):
     fh.write(gt + "\n")
     fh.close()
     return callers.compress_vcf(filename, conf)
+
+
+# if __name__=="__main__":
+#     conf = cp.SafeConfigParser()
+#     conf.read("./comp.conf")
+#     vars = list(pysam.VariantFile("test_small.vcf"))
+#     gen_alt_bam(conf.get('main', 'ref_genome'), vars, conf)

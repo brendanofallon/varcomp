@@ -4,6 +4,7 @@ Very simple tool for simulating paired end ngs reads. No base calling or pcr err
 
 import random
 import pysam
+import string
 
 revcomp_lookup={
     'A': 'T',
@@ -44,8 +45,9 @@ class ReadSimulator(object):
         # print "Seq: " + templ_seq
         # print "1st: " + first_read
         # print "2nd: " + second_read
-        first_read_name = '@' + str(self.counter) + ":" + self.target_chr + ":" + str(ref_read_start) + "/1"
-        second_read_name = '@' + str(self.counter) + ":" + self.target_chr + ":" + str(ref_read_start) + "/2"
+        rnd = "".join([ random.choice(string.ascii_lowercase + string.ascii_uppercase) for _ in range(8)])
+        first_read_name = '@' + str(self.counter) + ":" + self.target_chr + ":" + rnd + ":" + str(ref_read_start)
+        second_read_name = '@' + str(self.counter) + ":" + self.target_chr + ":" + rnd + ":" + str(ref_read_start)
         first_fq = first_read_name + "\n" + first_read + "\n+\n" + self.quals
         second_fq = second_read_name + "\n" + second_read + "\n+\n" + self.quals
         self.counter += 1
