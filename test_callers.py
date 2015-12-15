@@ -104,6 +104,7 @@ def process_vcf(input_vcf, conf):
             }
 
     batches = batch_variants(pysam.VariantFile(input_vcf))
+    assert sum([len(b) for b in batches]) == len(list(pysam.VariantFile(input_vcf)))
     #for batch in batches:
     #    print "\n Batch of size " + str(len(batch))
     #    for v in sorted(batch, cmp=var_sort):
@@ -111,7 +112,6 @@ def process_vcf(input_vcf, conf):
     for batch in batches:
         process_variant(sorted(batch, cmp=var_sort), all_results, conf, batches.index(batch))
 
-    assert sum([len(b) for b in batches]) == len(list(pysam.VariantFile(input_vcf)))
 
     for caller in all_results:
         print "Caller: " + caller
