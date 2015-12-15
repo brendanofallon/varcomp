@@ -37,6 +37,7 @@ def vars_to_bed(variants, window=250):
 def call_variant_fb(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-fb.vcf"
     cmd=[conf.get('main', 'freebayes_path'), "-f", orig_genome_path, "-t", bed, "-b", bam, "-v", vcfoutput]
+    print "Executing " + " ".join(cmd)
     subprocess.check_output(cmd)
     return compress_vcf(vcfoutput, conf)
 
@@ -59,7 +60,7 @@ def call_variant_gatk_hc(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-hc.vcf"
     err = open("/dev/null")
     cmd="java -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T HaplotypeCaller -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
-    #print "Executing " + cmd
+    print "Executing " + cmd
     subprocess.check_output(cmd, shell=True)
     err.close()
     return compress_vcf(vcfoutput, conf)
