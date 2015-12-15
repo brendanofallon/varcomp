@@ -40,16 +40,11 @@ class ReadSimulator(object):
         second_read = revcomp(templ_seq[-self.read_len:])
         ref_templ_mid = self.target_pos-self.flanking_bases+template_pos
         ref_read_start = ref_templ_mid-template_size/2
-        # print "Mid: " + str(template_pos) + " length: " + str(template_size)
-        # print "Ref templ midpoint: " + str(ref_templ_mid) + " Read 1 start:" + str(ref_read_start)
-        # print "Seq: " + templ_seq
-        # print "1st: " + first_read
-        # print "2nd: " + second_read
         rnd = "".join([ random.choice(string.ascii_lowercase + string.ascii_uppercase) for _ in range(8)])
         first_read_name = '@' + str(self.counter) + ":" + self.target_chr + ":" + rnd + ":" + str(ref_read_start)
         second_read_name = '@' + str(self.counter) + ":" + self.target_chr + ":" + rnd + ":" + str(ref_read_start)
-        first_fq = first_read_name + "\n" + first_read + "\n+\n" + self.quals
-        second_fq = second_read_name + "\n" + second_read + "\n+\n" + self.quals
+        first_fq = first_read_name + "\n" + first_read + "\n+\n" + self.quals[0:len(first_read)]
+        second_fq = second_read_name + "\n" + second_read + "\n+\n" + self.quals[0:len(second_read)]
         self.counter += 1
         return (first_fq, second_fq)
 
