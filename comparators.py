@@ -147,9 +147,10 @@ def compare_vgraph(orig_vcf, caller_vcf, conf, bed=None):
     if orig_var_count > 0 and caller_var_count == 0:
         return NO_VARS_FOUND_RESULT
 
-    gt = get_first_gt(caller_vars[0])
-    if gt != "1/1":
-        return INCORRECT_GENOTYPE_RESULT
+    for var in caller_vars:
+        gt = get_first_gt(var)
+        if gt != "1/1":
+            return INCORRECT_GENOTYPE_RESULT
 
     bedcmd = ""
     if bed is not None:
