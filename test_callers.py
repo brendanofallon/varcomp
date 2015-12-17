@@ -9,7 +9,7 @@ import random
 import string
 import comparators
 
-def process_variant(variant_batch, results, conf):
+def process_variant(variant_batch, results, conf, batchnum):
     """
     Process the given variant, update results dict
     :param variant:
@@ -19,7 +19,7 @@ def process_variant(variant_batch, results, conf):
     :return:
     """
 
-    tmpdir = "tmp-working" + "".join([random.choice(string.ascii_uppercase + string.ascii_lowercase) for _ in range(8)])
+    tmpdir = "tmp-working-" + str(batchnum) + "-" + "".join([random.choice(string.ascii_uppercase + string.ascii_lowercase) for _ in range(8)])
     try:
         os.mkdir(tmpdir)
     except:
@@ -47,9 +47,9 @@ def process_variant(variant_batch, results, conf):
             results[caller][result] += 1
 
     os.chdir("..")
-    #os.system("rm -rf " + tmpdir)
+    os.system("rm -rf " + tmpdir)
 
-def canadd(var, batch, min_safe_dist=1000, max_batch_size=10):
+def canadd(var, batch, max_batch_size, min_safe_dist=2000):
     if len(batch)>=max_batch_size:
         return False
     for b in batch:
@@ -65,7 +65,7 @@ def batch_variants(vars, max_batch_size=10):
         unfilled_batches = [b for b in batches if len(b)<max_batch_size]
         found = False
         for b in unfilled_batches:
-            if canadd(var, b):
+            if canadd(var, b, max_batch_size):
                 b.append(var)
                 found = True
                 break
@@ -92,7 +92,6 @@ def process_vcf(input_vcf, conf):
     :param conf:
     :return:
     """
-
     #Initialize results structure
     all_results = {}
     for caller_name in callers.get_callers():
@@ -105,15 +104,14 @@ def process_vcf(input_vcf, conf):
             }
 
     batches = batch_variants(pysam.VariantFile(input_vcf))
-    for batch in batches:
-        print "\n Batch of size " + str(len(batch))
-        for v in sorted(batch, cmp=var_sort):
-            print "  " + v.chrom + "\t" + str(v.start) + "\t" + str(v.ref) + "\t" + str(v.alts[0])
-    for batch in batches:
-        process_variant(sorted(batch, cmp=var_sort), all_results, conf)
-        exit(1)
-
     assert sum([len(b) for b in batches]) == len(list(pysam.VariantFile(input_vcf)))
+    #for batch in batches:
+    #    print "\n Batch of size " + str(len(batch))
+    #    for v in sorted(batch, cmp=var_sort):
+    #        print "  " + v.chrom + "\t" + str(v.start) + "\t" + str(v.ref) + "\t" + str(v.alts[0])
+    for batch in batches:
+        process_variant(sorted(batch, cmp=var_sort), all_results, conf, batches.index(batch))
+
 
     for caller in all_results:
         print "Caller: " + caller
