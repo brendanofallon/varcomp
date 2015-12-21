@@ -11,6 +11,14 @@ INCORRECT_GENOTYPE_RESULT="Genotype mismatch"
 NO_MATCH_RESULT="Variants did not match"
 PARTIAL_MATCH="Partial variant match"
 
+HOM_REF_GT = "Hom ref."
+HET_GT = "Hom ref."
+HOM_ALT_GT = "Hom ref."
+
+hom_ref_gts = ["0/0", "0|0"]
+het_gts = ["0/1", "1/0", "1|0", "0|1"]
+hom_alt_gts = ["1/1", "1|1"]
+
 def read_all_vars(vcf, bed=None):
     """
     Try to read all the variants from th egiven vcf file into a list. If there's an error
@@ -54,12 +62,6 @@ def compare_raw(orig_vars, caller_vars):
     if len(orig_vars)>0 and len(caller_vars) == 0:
         return NO_VARS_FOUND_RESULT
 
-    if len(caller_vars)>0 and len(orig_vars)>0:
-        caller_gt = get_first_gt(caller_vars[0])
-        orig_gt = get_first_gt(orig_vars[0])
-        if caller_gt != orig_gt:
-            return INCORRECT_GENOTYPE_RESULT
-
     #There are multiple input and/or output vars
     #For every input var, is there at least one match?
     matches = []
@@ -92,7 +94,42 @@ def get_first_gt(var):
     if len(toks) <= 9:
         return None
 
-    return toks[9].split(":")[0]
+    gt = toks[9].split(":")[0]
+    if gt in hom_ref_gts:
+        return HOM_REF_GT
+    if gt in hom_alt_gts:
+        return HOM_ALT_GT
+    if gt in het_gts:
+        return HET_GT
+    return gt
+
+def compare_genotype(orig_vcf, caller_vcf, bed=None):
+    """
+    Compare the genotypes in the orig_vcf and caller_vcf variants and see
+    if any of the caller variants genotypes differ from the original variant genotypes
+    This will raise an exception if there are multiple genotypes present among the
+    original variants
+    :return: Either INCORRECT_GENOTYPE_RESULT or None, the latter if everything matches
+    """
+    orig_vars = read_all_vars(orig_vcf, bed)
+    caller_vars = read_all_vars(caller_vcf, bed)
+
+    orig_gt = None
+    for ovar in orig_vars:
+        ogt = get_first_gt(ovar)
+        if orig_gt is not None and ogt != orig_gt:
+            raise ValueError("Multiple differing gts in orig_vcf, can't handle this case now")
+        orig_gt = ogt
+
+    for cvar in caller_vars:
+        cgt = get_first_gt(cvar)
+        if cgt != orig_gt:
+            return INCORRECT_GENOTYPE_RESULT
+
+    return None
+
+
+
 
 def compare_nonorm(orig_vcf, caller_vcf, conf=None):
     """
@@ -146,11 +183,6 @@ def compare_vgraph(orig_vcf, caller_vcf, conf, bed=None):
     caller_var_count = len(caller_vars)
     if orig_var_count > 0 and caller_var_count == 0:
         return NO_VARS_FOUND_RESULT
-
-    for var in caller_vars:
-        gt = get_first_gt(var)
-        if gt != "1/1":
-            return INCORRECT_GENOTYPE_RESULT
 
     bedcmd = ""
     if bed is not None:

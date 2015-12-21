@@ -24,7 +24,9 @@ class ReadSimulator(object):
         self.flanking_bases=2000
         self.read_len=read_len
         ref = pysam.FastaFile(ref_genome)
-        self.seq = ref.fetch(target_chr, max(0, target_pos-self.flanking_bases), target_pos+self.flanking_bases)
+        self.seq_start = max(0, target_pos-self.flanking_bases)
+        self.seq_end = target_pos+self.flanking_bases
+        self.seq = ref.fetch(target_chr, self.seq_start, self.seq_end)
         self.counter = 0
         self.quals = "".join(['Z' for x in range(self.read_len)])
 
@@ -32,8 +34,8 @@ class ReadSimulator(object):
         """
         Generate a read pair and return a tuple of fastq-formatted strings suitable for writing to output files
         """
-        template_pos = int(random.gauss(self.target_pos, self.target_pos_stdev ))
-        #template_pos = int(random.gauss(len(self.seq)/2, self.target_pos_stdev ))
+        #template_pos = int(random.gauss(self.flanking_bases, self.target_pos_stdev ))
+        template_pos = int(random.gauss(len(self.seq)/2, self.target_pos_stdev ))
         template_size = int(random.gauss(self.mean_template_size, self.stdev_template_size))
         templ_seq = self.seq[template_pos-template_size/2:template_pos+template_size/2]
         first_read = templ_seq[0:self.read_len]

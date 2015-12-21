@@ -81,6 +81,6 @@ def get_callers():
         "freebayes": call_variant_fb,
         "platypus": call_variant_platypus,
         "rtg": call_variant_rtg,
-        "gatk-hc": call_variant_gatk_hc,
-        "wecall": call_wecall
+        "gatk-hc": call_variant_gatk_hc
+        #"wecall": call_wecall
     }

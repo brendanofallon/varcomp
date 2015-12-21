@@ -42,7 +42,10 @@ def process_variant(variant_batch, results, conf, batchnum):
         bed = callers.vars_to_bed([variant])
         vgraph_comp = comparators.get_comparators()['vgraph']
         for caller, vars in variants.iteritems():
-            result = vgraph_comp(orig_vcf, vars, conf, bed)
+
+            result = comparators.compare_genotype(orig_vcf, vars, bed)
+            if result is None:
+                result = vgraph_comp(orig_vcf, vars, conf, bed)
             print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + ": " + result
             results[caller][result] += 1
 

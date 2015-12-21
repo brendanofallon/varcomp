@@ -78,7 +78,7 @@ def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     subprocess.check_call(script_path, shell=True)
     return dest
 
-def gen_alt_bam(ref_path, variants, conf):
+def gen_alt_bam(ref_path, variants, conf, homs=True, depth=250):
 
     reads1 = "input_r1.fq"
     reads2 = "input_r2.fq"
@@ -87,7 +87,12 @@ def gen_alt_bam(ref_path, variants, conf):
     for variant in variants:
         alt_genome_path = 'alt_genome' + "".join([random.choice(string.ascii_lowercase + string.ascii_uppercase) for _ in range(10)]) + '.fa'
         alt_genome_size = gen_alt_genome(variant, ref_path, alt_genome_path, overwrite=True)
-        generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, prefix='inputvar', read1_fh=read1_fh, read2_fh=read2_fh)
+
+        if homs:
+            generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2,read_count=depth, read1_fh=read1_fh, read2_fh=read2_fh)
+        else:
+            generate_reads(ref_path, variant.chrom, variant.start, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
+            generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
 
     read1_fh.close()
     read2_fh.close()

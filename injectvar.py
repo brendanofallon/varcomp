@@ -3,8 +3,6 @@ __author__ = 'bofallon'
 import pysam
 import os
 import sys
-import subprocess
-import json
 import ConfigParser as cp
 import argparse
 import callers
@@ -14,7 +12,7 @@ import comparators
 import traceback as tb
 
 
-def process_variant(variant, results, conf):
+def process_variant(variant, results, conf, homs):
     """
     Process the given variant, update results dict
     :param variant:
@@ -31,11 +29,14 @@ def process_variant(variant, results, conf):
         pass
     os.chdir(tmpdir)
 
-    orig_vcf = bam_simulation.write_vcf(variant, "test_input.vcf", conf)
+    vcf_gt = "0/1"
+    if homs:
+        vcf_gt = "1/1"
+    orig_vcf = bam_simulation.write_vcf(variant, "test_input.vcf", conf, vcf_gt)
     ref_path = conf.get('main', 'ref_genome')
 
     bed = callers.vars_to_bed([variant])
-    bam = bam_simulation.gen_alt_bam(ref_path, [variant], conf)
+    bam = bam_simulation.gen_alt_bam(ref_path, [variant], conf, homs)
 
     variant_callers = callers.get_callers()
     variants = {}
@@ -45,14 +46,17 @@ def process_variant(variant, results, conf):
 
     for method_name, comp in comparators.get_comparators().iteritems():
         for caller, vars in variants.iteritems():
-            result = comp(orig_vcf, vars, conf)
+
+            result = comparators.compare_genotype(orig_vcf, vars, bed)
+            if result is None:
+                result = comp(orig_vcf, vars, conf)
             print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + method_name + ": " + result
             results[caller][method_name][result] += 1
 
     os.chdir("..")
     os.system("rm -rf " + tmpdir)
 
-def process_vcf(input_vcf, conf):
+def process_vcf(input_vcf, homs, conf):
     """
     Iterate over entire vcf file, processing each variant individually and collecting results
     :param input_vcf:
@@ -77,7 +81,7 @@ def process_vcf(input_vcf, conf):
 
     for input_var in input_vcf:
         try:
-            process_variant(input_var, all_results, conf)
+            process_variant(input_var, all_results, conf, homs)
         except Exception as ex:
             print "Error processing variant " + str(input_var) + " : " + str(ex)
             tb.print_exc(file=sys.stdout)
@@ -94,8 +98,9 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser("Inject, simulate, call, compare")
     parser.add_argument("-c", "--conf", help="Path to configuration file", default="./comp.conf")
     parser.add_argument("-v", "--vcf", help="Input vcf file")
+    parser.add_argument("--het", help="Run all variants as hets (default false, run everything as homs)", action='store_true')
     args = parser.parse_args()
 
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
-    process_vcf(args.vcf, conf)
+    process_vcf(args.vcf, not args.het, conf)
