@@ -9,7 +9,7 @@ import random
 import string
 import comparators
 
-def process_variant(variant_batch, results, conf, batchnum):
+def process_variant(variant_batch, results, conf, batchnum, homs):
     """
     Process the given variant, update results dict
     :param variant:
@@ -29,7 +29,7 @@ def process_variant(variant_batch, results, conf, batchnum):
     ref_path = conf.get('main', 'ref_genome')
 
     bed = callers.vars_to_bed(variant_batch)
-    bam = bam_simulation.gen_alt_bam(ref_path, variant_batch, conf)
+    bam = bam_simulation.gen_alt_bam(ref_path, variant_batch, conf, homs)
 
     variant_callers = callers.get_callers()
     variants = {}
@@ -88,7 +88,7 @@ def var_sort(a, b):
     else:
         return 1
 
-def process_vcf(input_vcf, conf):
+def process_vcf(input_vcf, homs, conf):
     """
     Iterate over entire vcf file, processing each variant individually and collecting results
     :param input_vcf:
@@ -113,7 +113,7 @@ def process_vcf(input_vcf, conf):
     #    for v in sorted(batch, cmp=var_sort):
     #        print "  " + v.chrom + "\t" + str(v.start) + "\t" + str(v.ref) + "\t" + str(v.alts[0])
     for batch in batches:
-        process_variant(sorted(batch, cmp=var_sort), all_results, conf, batches.index(batch))
+        process_variant(sorted(batch, cmp=var_sort), all_results, conf, batches.index(batch), homs)
 
 
     for caller in all_results:
@@ -129,9 +129,10 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser("Test variant callers")
     parser.add_argument("-c", "--conf", help="Path to configuration file", default="./comp.conf")
     parser.add_argument("-v", "--vcf", help="Input vcf file")
+    parser.add_argument("--het", help="Run all variants as hets (default false, run everything as homs)", action='store_true')
     args = parser.parse_args()
 
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
 
-    process_vcf(args.vcf, conf)
+    process_vcf(args.vcf, not args.het, conf)

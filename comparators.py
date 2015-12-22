@@ -12,8 +12,8 @@ NO_MATCH_RESULT="Variants did not match"
 PARTIAL_MATCH="Partial variant match"
 
 HOM_REF_GT = "Hom ref."
-HET_GT = "Hom ref."
-HOM_ALT_GT = "Hom ref."
+HET_GT = "Het"
+HOM_ALT_GT = "Hom alt."
 
 hom_ref_gts = ["0/0", "0|0"]
 het_gts = ["0/1", "1/0", "1|0", "0|1"]
