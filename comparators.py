@@ -5,11 +5,25 @@ import sys
 import os
 import ConfigParser as cp
 
+
+ZYGOSITY_MATCH="Zygosity match"
+ZYGOSITY_EXTRA_ALLELE="Extra allele"
+ZYGOSITY_MISSING_ALLELE="Missing allele"
+
+ALLELE_MATCH="Alleles matched"
+ALLELE_MISMATCH="Alleles did not match"
+ALLELE_EXTRA="Additional variants identified"
+
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
 INCORRECT_GENOTYPE_RESULT="Genotype mismatch"
 NO_MATCH_RESULT="Variants did not match"
 PARTIAL_MATCH="Partial variant match"
+
+all_result_types = (NO_VARS_FOUND_RESULT, MATCH_RESULT, INCORRECT_GENOTYPE_RESULT, NO_MATCH_RESULT)
+genotype_result_types = (NO_VARS_FOUND_RESULT, INCORRECT_GENOTYPE_RESULT)
+var_result_types = set(all_result_types)-set(genotype_result_types)
+
 
 HOM_REF_GT = "Hom ref."
 HET_GT = "Het"
@@ -18,6 +32,10 @@ HOM_ALT_GT = "Hom alt."
 hom_ref_gts = ["0/0", "0|0"]
 het_gts = ["0/1", "1/0", "1|0", "0|1"]
 hom_alt_gts = ["1/1", "1|1"]
+
+
+
+
 
 def read_all_vars(vcf, bed=None):
     """
@@ -65,7 +83,7 @@ def compare_raw(orig_vars, caller_vars):
     #There are multiple input and/or output vars
     #For every input var, is there at least one match?
     matches = []
-    unmatched = []
+    unmatched_orig = []
     for ovar in orig_vars:
         match_found = False
         for cvar in caller_vars:
@@ -75,13 +93,13 @@ def compare_raw(orig_vars, caller_vars):
         if match_found:
             matches.append( (ovar, cvar) )
         else:
-            unmatched.append(ovar)
+            unmatched_orig.append(ovar)
 
-    if len(matches)>0 and len(unmatched)==0:
+    if len(matches)>0 and len(unmatched_orig)==0:
         return MATCH_RESULT
-    if len(matches)==0 and len(unmatched)>0:
+    if len(matches)==0 and len(unmatched_orig)>0:
         return NO_MATCH_RESULT
-    if len(matches)>0 and len(unmatched)>0:
+    if len(matches)>0 and len(unmatched_orig)>0:
         return PARTIAL_MATCH
 
 def get_first_gt(var):

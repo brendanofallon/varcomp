@@ -46,7 +46,6 @@ def process_variant(variant, results, conf, homs):
 
     for method_name, comp in comparators.get_comparators().iteritems():
         for caller, vars in variants.iteritems():
-
             result = comparators.compare_genotype(orig_vcf, vars, bed)
             if result is None:
                 result = comp(orig_vcf, vars, conf)
