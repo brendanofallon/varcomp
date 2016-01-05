@@ -46,11 +46,18 @@ def process_variant(variant, results, conf, homs):
 
     for method_name, comp in comparators.get_comparators().iteritems():
         for caller, vars in variants.iteritems():
-            result = comparators.compare_genotype(orig_vcf, vars, bed)
-            if result is None:
-                result = comp(orig_vcf, vars, conf)
-            print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + method_name + ": " + result
-            results[caller][method_name][result] += 1
+            result = comp(orig_vcf, vars, bed, conf)
+            result_str = result.short()
+            if result_str == comparators.NO_MATCH_RESULT or result_str == comparators.PARTIAL_MATCH:
+                gt_mod_vars = comparators.set_genotypes(vars, vcf_gt, conf)
+                gt_mod_result = comp(orig_vcf, gt_mod_vars, bed, conf)
+                if gt_mod_result.short() == comparators.MATCH_RESULT:
+                    if vcf_gt in "0/1":
+                        result_str = comparators.ZYGOSITY_EXTRA_ALLELE
+                    else:
+                        result_str = comparators.ZYGOSITY_MISSING_ALLELE
+            print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + method_name + ": " + result_str
+            results[caller][method_name][result_str] += 1
 
     os.chdir("..")
     os.system("rm -rf " + tmpdir)
@@ -73,8 +80,9 @@ def process_vcf(input_vcf, homs, conf):
                 comparators.NO_VARS_FOUND_RESULT: 0,
                 comparators.NO_MATCH_RESULT: 0,
                 comparators.MATCH_RESULT: 0,
-                comparators.PARTIAL_MATCH: 0,
-                comparators.INCORRECT_GENOTYPE_RESULT: 0
+                comparators.ZYGOSITY_MISSING_ALLELE: 0,
+                comparators.ZYGOSITY_MISSING_TWO_ALLELES: 0,
+                comparators.ZYGOSITY_EXTRA_ALLELE: 0,
             }
 
 
