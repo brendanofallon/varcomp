@@ -40,15 +40,15 @@ def pick_location(regions):
     return (region[0], loc)
 
 def generate_all(ref, regions, output):
-    reps_per_size = 100
+    reps_per_size = 10
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
         loc = pick_location(regions)
-        for size in range(1, 150, 10):
-            #var = gen_deletion(ref, loc[0], loc[1], size)
-            var = gen_insertion(ref, loc[0], loc[1], size)
+        for size in range(50, 150, 1000):
+            var = gen_deletion(ref, loc[0], loc[1], size)
+            #var = gen_insertion(ref, loc[0], loc[1], size)
             #var = gen_duplication(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
             output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")

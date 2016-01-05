@@ -22,7 +22,7 @@ def process_variant(variant, results, conf, homs):
     :return:
     """
 
-    tmpdir = "tmp-working" + str(time.time())[-7:].replace(".", "")
+    tmpdir = "tmp-working-chr" + str(variant.chrom) + "-" + str(variant.start)
     try:
         os.mkdir(tmpdir)
     except:
