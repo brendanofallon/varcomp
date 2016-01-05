@@ -285,7 +285,7 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
     cmd = "java -Xmx2g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
     if bed is not None:
         cmd = cmd + " --bed-regions " + bed
-    subprocess.check_call(cmd, shell=True, executable="/bin/bash")
+    subprocess.check_output(cmd, shell=True, executable="/bin/bash")
     orig_vars = read_all_vars(orig_vcf, bed)
     tp_vars = read_all_vars(output_dir + "/tp.vcf.gz")
     fp_vars = read_all_vars(output_dir + "/fp.vcf.gz")
