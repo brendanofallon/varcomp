@@ -66,6 +66,15 @@ def call_variant_gatk_hc(bam, orig_genome_path, bed, conf=None):
     return compress_vcf(vcfoutput, conf)
 
 
+def call_variant_gatk_ug(bam, orig_genome_path, bed, conf=None):
+    vcfoutput = "output-ug.vcf"
+    err = open("/dev/null")
+    cmd="java -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T UnifiedGenotyper -glm BOTH -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
+    #print "Executing " + cmd
+    subprocess.check_output(cmd, shell=True, stderr=err)
+    err.close()
+    return compress_vcf(vcfoutput, conf)
+
 
 def call_variant_rtg(bam, orig_genome_path, bed, conf=None):
     output_dir = "rtg-output-" + str(time.time()).replace(".", "")[-7:]
@@ -81,6 +90,7 @@ def get_callers():
         "freebayes": call_variant_fb,
         "platypus": call_variant_platypus,
         "rtg": call_variant_rtg,
-        "gatk-hc": call_variant_gatk_hc
+        "gatk-hc": call_variant_gatk_hc,
+        "gatk-ug": call_variant_gatk_ug
         #"wecall": call_wecall
     }

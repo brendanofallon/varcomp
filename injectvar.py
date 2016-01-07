@@ -60,7 +60,7 @@ def process_variant(variant, results, conf, homs):
             results[caller][method_name][result_str] += 1
 
     os.chdir("..")
-    os.system("rm -rf " + tmpdir)
+    #os.system("rm -rf " + tmpdir)
 
 def process_vcf(input_vcf, homs, conf):
     """
