@@ -282,7 +282,7 @@ def bgz_tabix(path, conf):
 
 def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
     output_dir = "vcfeval-output" + str(time.time())[-6:].replace(".", "")
-    cmd = "java -Xmx2g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
+    cmd = "java -Xmx2g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " --all-records -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
     if bed is not None:
         cmd = cmd + " --bed-regions " + bed
     subprocess.check_output(cmd, shell=True, executable="/bin/bash")
