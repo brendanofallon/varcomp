@@ -1,13 +1,13 @@
-
-import argparse
 import ConfigParser as cp
-import callers
-import pysam
+import argparse
 import os
-import bam_simulation
 import random
 import string
-import comparators
+
+import pysam
+
+from vcomp import bam_simulation, callers, comparators
+
 
 def process_variant(variant_batch, results, conf, batchnum, homs):
     """
