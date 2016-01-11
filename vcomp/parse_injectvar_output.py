@@ -1,6 +1,6 @@
-
 import sys
-import comparators
+
+from vcomp import comparators
 
 results_by_method = {}
 results = {}

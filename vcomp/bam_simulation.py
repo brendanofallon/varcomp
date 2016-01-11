@@ -1,13 +1,13 @@
-
-import pysam
-import read_simulator as rs
 import os
-import subprocess
 import random
 import string
+import subprocess
+
+import pysam
+
 import callers
-import ConfigParser as cp
-import gzip
+import read_simulator as rs
+
 
 def gen_alt_genome(variant, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
     """
