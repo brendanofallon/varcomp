@@ -9,7 +9,7 @@ import traceback as tb
 import util
 import pysam
 
-from vcomp import bam_simulation, callers, comparators, normalizers
+import bam_simulation, callers, comparators, normalizers
 
 
 NO_VARS_FOUND_RESULT="No variants identified"
@@ -21,6 +21,8 @@ ZYGOSITY_MATCH="Zygosity match"
 ZYGOSITY_EXTRA_ALLELE="Extra allele"
 ZYGOSITY_MISSING_ALLELE="Missing allele"
 ZYGOSITY_MISSING_TWO_ALLELES="Missing two alleles!"
+
+all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, PARTIAL_MATCH, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
 
 def result_from_tuple(tup):
     """
@@ -47,11 +49,13 @@ def result_from_tuple(tup):
 
 def process_variant(variant, conf, homs):
     """
-    Process the given variant, update results dict
-    :param variant:
-    :param results_by_caller:
-    :param results_by_method:
-    :param conf:
+    Process the given variant by creating a fake 'genome' with the variant, simulating reads from it,
+     aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
+     comparison methods to generate results. The results are just written to a big text file, which needs to
+     be parsed by a separate utility to generate anything readable.
+    :param variant: pysam.Variant object to simulate
+    :param conf: Configuration containing paths to all required binaries / executables / genomes, etc.
+    :param homs: Boolean indicating whether variants should be simulated as hets or homs
     :return:
     """
 
@@ -65,41 +69,52 @@ def process_variant(variant, conf, homs):
     vcf_gt = "0/1"
     if homs:
         vcf_gt = "1/1"
-    orig_vcf = bam_simulation.write_vcf(variant, "test_input.vcf", conf, vcf_gt)
-    ref_path = conf.get('main', 'ref_genome')
+    try:
+        orig_vcf = bam_simulation.write_vcf(variant, "test_input.vcf", conf, vcf_gt)
+        ref_path = conf.get('main', 'ref_genome')
 
-    bed = callers.vars_to_bed([variant])
-    bam = bam_simulation.gen_alt_bam(ref_path, [variant], conf, homs)
+        bed = callers.vars_to_bed([variant])
+        bam = bam_simulation.gen_alt_bam(ref_path, [variant], conf, homs)
 
-    variant_callers = callers.get_callers()
-    variants = {}
-    for caller in variant_callers:
-        vars = variant_callers[caller](bam, ref_path, bed, conf)
-        variants[caller] = vars
+        variant_callers = callers.get_callers()
+        variants = {}
+        for caller in variant_callers:
+            vars = variant_callers[caller](bam, ref_path, bed, conf)
+            variants[caller] = vars
 
 
+        remove_tmpdir = True
+        for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
+            normed_orig_vars = normalizer(orig_vcf, conf)
 
-    for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
-        normed_orig_vars = normalizer(orig_vcf, conf)
+            for caller in variants:
+                normed_caller_vars = normalizer(variants[caller], conf)
 
-        for caller in variants:
-            normed_caller_vars = normalizer(variants[caller], conf)
-
-            for comparator_name, comparator in comparators.get_comparators().iteritems():
-                result = comparator(normed_orig_vars, normed_caller_vars, bed, conf)
-                result_str = result_from_tuple(result)
-                if result_str == NO_MATCH_RESULT or result_str == PARTIAL_MATCH:
-                    gt_mod_vars = util.set_genotypes(normed_caller_vars, vcf_gt, conf)
-                    gt_mod_result = comparator(normed_orig_vars, gt_mod_vars, bed, conf)
-                    if result_from_tuple(gt_mod_result) == MATCH_RESULT:
-                        if vcf_gt in "0/1":
-                            result_str = ZYGOSITY_EXTRA_ALLELE
-                        else:
-                            result_str = ZYGOSITY_MISSING_ALLELE
-                print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result_str
+                for comparator_name, comparator in comparators.get_comparators().iteritems():
+                    result = comparator(normed_orig_vars, normed_caller_vars, bed, conf)
+                    result_str = result_from_tuple(result)
+                    if result_str == NO_MATCH_RESULT or result_str == PARTIAL_MATCH:
+                        gt_mod_vars = util.set_genotypes(normed_caller_vars, vcf_gt, conf)
+                        gt_mod_result = comparator(normed_orig_vars, gt_mod_vars, bed, conf)
+                        if result_from_tuple(gt_mod_result) == MATCH_RESULT:
+                            if vcf_gt in "0/1":
+                                result_str = ZYGOSITY_EXTRA_ALLELE
+                                remove_tmpdir = False
+                            else:
+                                result_str = ZYGOSITY_MISSING_ALLELE
+                                remove_tmpdir = False
+                    print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result_str
+    except Exception as ex:
+        print "Error processing variant " + str(variant) + " : " + str(ex)
+        tb.print_exc(file=sys.stdout)
+        remove_tmpdir = False
 
     os.chdir("..")
-    #os.system("rm -rf " + tmpdir)
+    if remove_tmpdir:
+        os.system("rm -rf " + tmpdir)
+    else:
+        dirname = "tmpdir-chr" + variant.chrom + "-" + str(variant.start)
+        os.system("mv " + tmpdir + " " + dirname)
 
 def process_vcf(input_vcf, homs, conf):
     """
@@ -112,12 +127,7 @@ def process_vcf(input_vcf, homs, conf):
 
 
     for input_var in input_vcf:
-        try:
-            process_variant(input_var, conf, homs)
-        except Exception as ex:
-            print "Error processing variant " + str(input_var) + " : " + str(ex)
-            tb.print_exc(file=sys.stdout)
-
+        process_variant(input_var, conf, homs)
 
 
 if __name__=="__main__":

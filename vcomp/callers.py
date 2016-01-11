@@ -37,7 +37,12 @@ def vars_to_bed(variants, window=250):
 def call_variant_fb(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-fb.vcf"
     cmd=[conf.get('main', 'freebayes_path'), "-f", orig_genome_path, "-t", bed, "-b", bam, "-v", vcfoutput]
-    #print "Executing " + " ".join(cmd)
+    subprocess.check_output(cmd)
+    return compress_vcf(vcfoutput, conf)
+
+def call_variant_fb_minrepeatentropy(bam, orig_genome_path, bed, conf=None):
+    vcfoutput = "output-fb.vcf"
+    cmd=[conf.get('main', 'freebayes_path'), "-f", orig_genome_path, "--min-repeat-entropy", "1", "-t", bed, "-b", bam, "-v", vcfoutput]
     subprocess.check_output(cmd)
     return compress_vcf(vcfoutput, conf)
 
@@ -91,6 +96,7 @@ def get_callers():
         "platypus": call_variant_platypus,
         "rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,
-        "gatk-ug": call_variant_gatk_ug
+        "gatk-ug": call_variant_gatk_ug,
         #"wecall": call_wecall
+        # "freebayes-mre": call_variant_fb_minrepeatentropy,
     }

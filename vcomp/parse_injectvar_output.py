@@ -1,17 +1,23 @@
 import sys
 
-from vcomp import comparators
+import injectvar
 
 results_by_method = {}
 results = {}
 vgraph_vcfeval_mismatches = []
 all_methods = []
+all_comp_methods = []
 
 def formatted(results, tot, result):
+    if tot==0.0:
+        return "NA\t"
     if result in results:
-        return "{:.5}".format(100.0 * results[result] / tot) + "\t"
+        if tot==1:
+            return str(results[result]) + "\t"
+        else:
+            return "{:.5}".format(100.0 * results[result] / tot) + "\t"
     else:
-        return "0.0\t"
+        return "0\t"
 
 def find_vgraph_vcfeval_mismatches(var_results, var):
     mismatches = []
@@ -28,14 +34,15 @@ prev_var = "-1"
 for line in open(sys.argv[1], "r"):
     if line.startswith("Result for"):
 
-        toks=line.strip().split(' ', 10)
+        toks=line.strip().split(' ', 12)
         if len(toks)<10:
             continue
         ref = toks[5]
         alt = toks[6].replace(":", "")
         caller = toks[7]
-        method = toks[9]
-        result = toks[10]
+        norm_method = toks[9]
+        comp_method = toks[11]
+        result = toks[12]
         thisvar = toks[2] + ":" + toks[3] + ":" + ref + ":" + alt
 
         if thisvar != prev_var:
@@ -43,19 +50,30 @@ for line in open(sys.argv[1], "r"):
             var_results = {}
             prev_var = thisvar
 
+        if not norm_method in all_methods:
+            all_methods.append(norm_method)
+
+        if not comp_method in all_comp_methods:
+            all_comp_methods.append(comp_method)
+
         if not caller in var_results:
             var_results[caller] = {}
 
-        var_results[caller][method] = result
+        if not norm_method in var_results[caller]:
+            var_results[caller][norm_method] = {}
+
+        var_results[caller][norm_method][comp_method] = result
 
         if not caller in results:
             results[caller] = {}
 
-        if not method in results[caller]:
-            results[caller][method] = {}
-        resultmap = results[caller][method]
-        if not method in all_methods:
-            all_methods.append(method)
+        if not norm_method in results[caller]:
+            results[caller][norm_method] = {}
+
+        if not comp_method in results[caller][norm_method]:
+            results[caller][norm_method][comp_method] = {}
+
+        resultmap = results[caller][norm_method][comp_method]
 
         if result in resultmap:
             resultmap[result] += 1
@@ -64,64 +82,70 @@ for line in open(sys.argv[1], "r"):
 
 
 for caller in results:
-    print "\n\t" + caller
-    for result in sorted(comparators.all_result_types):
+    print "\n" + caller
+    for result in sorted(injectvar.all_result_types):
         print "\t" + result,
     print ""
-    for method in sorted(all_methods):
-        print method + "\t",
-        tot = 0.0
-        for result in sorted(comparators.all_result_types):
-            if result in results[caller][method]:
-                tot += results[caller][method][result]
-        for result in sorted(comparators.all_result_types):
-            print formatted(results[caller][method], tot,  result),
-        print "\n",
+    for norm_method in sorted(all_methods):
+        for comp_method in sorted(all_comp_methods):
+            print norm_method + "/" + comp_method + "\t",
+            # tot = 0.0
+            # for result in sorted(injectvar.all_result_types):
+            #     if result in results[caller][norm_method][comp_method]:
+            #         tot += results[caller][norm_method][comp_method][result]
+            for result in sorted(injectvar.all_result_types):
+                print formatted(results[caller][norm_method][comp_method], 1, result),
+            print "\n",
 
 
 print "\nCaller comparison: (=matches / (matches + not matched + no vars found + incorrect genotypes))"
 
-method = "vgraph:"
-print "\t" + method
+comp_methods = ("vgraph:", "vcfeval:")
+norm_method = "nonorm"
+for comp_method in comp_methods:
+    print "\t" + comp_method,
+print ""
+
 for caller in results:
     print caller + "\t",
-    tot = 0.0
-    method = "vgraph:"
-    for result in sorted(comparators.all_result_types):
-        if result in results[caller][method]:
-            tot += results[caller][method][result]
-    print formatted(results[caller][method], tot, comparators.MATCH_RESULT),
+    for comp_method in comp_methods:
+        # tot = 0.0
+        # for result in sorted(injectvar.all_result_types):
+        #     if result in results[caller][norm_method][comp_method]:
+        #         tot += results[caller][norm_method][comp_method][result]
+        print formatted(results[caller][norm_method][comp_method], 1, injectvar.MATCH_RESULT),
     print "\n",
 
-print "\nCaller err breakdown: mismatch / incorrect genotype / no variant found"
+print "\nCaller err breakdown: mismatch / extra allele / missing allele / no variant found"
 
-method = "vgraph:"
-print "\t" + method
+norm_method = "nonorm"
+comp_method = "vgraph:"
+print "\t" + norm_method
 for caller in results:
     print caller + "\t",
-    tot = 0.0
-    method = "vgraph:"
-    for result in sorted(comparators.all_result_types):
-        if result in results[caller][method]:
-            tot += results[caller][method][result]
-    print formatted(results[caller][method], tot, comparators.NO_MATCH_RESULT),
-    print formatted(results[caller][method], tot, comparators.INCORRECT_GENOTYPE_RESULT),
-    print formatted(results[caller][method], tot, comparators.NO_VARS_FOUND_RESULT),
+    # tot = 0.0
+    # for result in sorted(injectvar.all_result_types):
+    #     if result in results[caller][norm_method][comp_method]:
+    #         tot += results[caller][norm_method][comp_method][result]
+    print formatted(results[caller][norm_method][comp_method], 1, injectvar.NO_MATCH_RESULT),
+    print formatted(results[caller][norm_method][comp_method], 1, injectvar.ZYGOSITY_EXTRA_ALLELE),
+    print formatted(results[caller][norm_method][comp_method], 1, injectvar.ZYGOSITY_MISSING_ALLELE),
+    print formatted(results[caller][norm_method][comp_method], 1, injectvar.NO_VARS_FOUND_RESULT),
     print "\n",
 
 print "\n\nMatcher comparison: (=matches / (matches + not matched))"
-for method in sorted(all_methods):
-    print "\t" + method,
+for norm_method in sorted(all_methods):
+    print "\t" + norm_method,
 print "\n",
 
 for caller in results:
     print caller + "\t",
-    for method in sorted(all_methods):
+    for norm_method in sorted(all_methods):
         tot = 0.0
-        for result in sorted(comparators.var_result_types):
-            if result in results[caller][method]:
-                tot += results[caller][method][result]
-        print formatted(results[caller][method], tot, comparators.MATCH_RESULT),
+        for result in sorted(injectvar.var_result_types):
+            if result in results[caller][norm_method]:
+                tot += results[caller][norm_method][result]
+        print formatted(results[caller][norm_method], 1, injectvar.MATCH_RESULT),
     print "\n",
 
 
