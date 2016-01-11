@@ -15,6 +15,21 @@ def normalize_nothing(orig_vcf, conf):
     newvcf_name = util.bgz_tabix(newvcf_name, conf)
     return newvcf_name
 
+def normalize_vap_leftalign(orig_vcf, conf):
+    err = open("/dev/null")
+    tmp_vcf = orig_vcf.replace(".vcf", ".vap.tmp.vcf").replace(".gz", "")
+    final_vcf = orig_vcf.replace(".vcf", ".vap.leftaligned.vcf")
+    norm_orig_cmd = conf.get('main', 'vcfallelicprimitives_path') + " " + orig_vcf
+    tmp_output=subprocess.check_output(norm_orig_cmd, shell=True)
+    with open(tmp_vcf, "w") as fh:
+        fh.write(tmp_output)
+
+
+    cmd = "java -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T LeftAlignAndTrimVariants -R " + conf.get('main', 'ref_genome') + " -V " + tmp_vcf + " -o " + final_vcf
+    subprocess.check_output(cmd, shell=True)
+    err.close()
+
+    return util.bgz_tabix(final_vcf, conf)
 
 def normalize_vt(orig_vcf, conf):
     """
@@ -46,6 +61,7 @@ def normalize_bcftools(orig_vcf, conf):
 
 def get_normalizers():
     return {
+        'vapleft': normalize_vap_leftalign,
         'nonorm': normalize_nothing,
         'vt': normalize_vt,
         'bcftools': normalize_bcftools

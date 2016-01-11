@@ -3,10 +3,8 @@ import pysam
 import subprocess
 import sys
 import os
-import gzip
 import time
-import ConfigParser as cp
-
+import injectvar
 
 
 
@@ -93,12 +91,12 @@ class VariantCompResult(object):
 
     def short(self):
         if len(self.matches)>0 and len(self.orig_unmatched)==0 and len(self.called_unmatched)==0:
-            return MATCH_RESULT
+            return injectvar.MATCH_RESULT
         if len(self.matches)==0 and len(self.orig_unmatched)>0:
-            return NO_MATCH_RESULT
+            return injectvar.NO_MATCH_RESULT
         if len(self.matches)==0 and len(self.orig_unmatched)==0 and len(self.called_unmatched)==0:
-            return NO_VARS_FOUND_RESULT
-        return PARTIAL_MATCH
+            return injectvar.NO_VARS_FOUND_RESULT
+        return injectvar.PARTIAL_MATCH
 
 def comp_zyg(tvar, qvar):
     """
@@ -111,18 +109,18 @@ def comp_zyg(tvar, qvar):
     q = get_first_gt(qvar)
     if t == HET_GT:
         if q == HET_GT:
-            return ZYGOSITY_MATCH
+            return injectvar.ZYGOSITY_MATCH
         if q == HOM_ALT_GT:
-            return ZYGOSITY_EXTRA_ALLELE
+            return injectvar.ZYGOSITY_EXTRA_ALLELE
         if q == HOM_REF_GT:
-            return ZYGOSITY_MISSING_ALLELE
+            return injectvar.ZYGOSITY_MISSING_ALLELE
     if t == HOM_ALT_GT:
         if q == HET_GT:
-            return ZYGOSITY_MISSING_ALLELE
+            return injectvar.ZYGOSITY_MISSING_ALLELE
         if q == HOM_ALT_GT:
-            return ZYGOSITY_MATCH
+            return injectvar.ZYGOSITY_MATCH
         if q == HOM_REF_GT:
-            return ZYGOSITY_MISSING_TWO_ALLELES
+            return injectvar.ZYGOSITY_MISSING_TWO_ALLELES
     raise ValueError('Should never get here - was true var Hom Ref?')
 
 
@@ -130,8 +128,8 @@ def comp_zyg(tvar, qvar):
 
 def compare_raw(orig_vcf, caller_vcf, bed, conf):
     """
-    Compare variants with absolutely no normalization. This still requires a little work since there's not
-    any guarantees about variants being in the right order or the positions of false pos / false neg vars
+    Compare variants with absolutely no normalization. This still requires a little work since there
+    are no guarantees about variants being in the right order or the positions of false pos / false neg vars
     :return:
     """
     orig_vars = read_all_vars(orig_vcf, bed)
@@ -166,7 +164,7 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
     caller_vars = read_all_vars(caller_vcf, bed)
     caller_var_count = len(caller_vars)
     if orig_var_count > 0 and caller_var_count == 0:
-        return NO_VARS_FOUND_RESULT
+        return injectvar.NO_VARS_FOUND_RESULT
 
     bedcmd = ""
     if bed is not None:
@@ -184,6 +182,12 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
 
 
 def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
+
+    #vcfeval will throw an exception if caller vcf is empty, so catch that case here
+    caller_vars = read_all_vars(caller_vcf, bed)
+    if len(caller_vars)==0:
+        return (read_all_vars(orig_vcf, bed), [], caller_vars)
+
     output_dir = "vcfeval-output" + str(time.time())[-6:].replace(".", "")
     cmd = "java -Xmx2g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " --all-records -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
     if bed is not None:
@@ -198,7 +202,7 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
 
 def get_comparators():
     return {
-        "nothing": compare_raw,
+        "raw": compare_raw,
         "vgraph": compare_vgraph,
         "vcfeval": compare_vcfeval
     }
