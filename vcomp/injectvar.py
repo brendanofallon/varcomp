@@ -90,7 +90,7 @@ def process_variant(variant, conf, homs):
                 for comparator_name, comparator in comparators.get_comparators().iteritems():
                     result = comparator(normed_orig_vars, normed_caller_vars, bed, conf)
                     result_str = result_from_tuple(result)
-                    if result_str == NO_MATCH_RESULT or result_str == PARTIAL_MATCH:
+                    if result_str == NO_MATCH_RESULT:
                         gt_mod_vars = util.set_genotypes(normed_caller_vars, vcf_gt, conf)
                         gt_mod_result = comparator(normed_orig_vars, gt_mod_vars, bed, conf)
                         if result_from_tuple(gt_mod_result) == MATCH_RESULT:
