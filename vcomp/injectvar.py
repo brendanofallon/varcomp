@@ -15,14 +15,13 @@ import bam_simulation, callers, comparators, normalizers
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
 NO_MATCH_RESULT="Variants did not match"
-PARTIAL_MATCH="Partial variant match"
 
 ZYGOSITY_MATCH="Zygosity match"
 ZYGOSITY_EXTRA_ALLELE="Extra allele"
 ZYGOSITY_MISSING_ALLELE="Missing allele"
 ZYGOSITY_MISSING_TWO_ALLELES="Missing two alleles!"
 
-all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, PARTIAL_MATCH, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
+all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
 
 def result_from_tuple(tup):
     """
@@ -40,10 +39,8 @@ def result_from_tuple(tup):
         else:
             return NO_VARS_FOUND_RESULT
     if len(unmatched_orig)==0 and len(matches)>0:
-        if len(unmatched_caller)>0:
-            return PARTIAL_MATCH
-        else:
-            return MATCH_RESULT
+        return MATCH_RESULT
+    return NO_MATCH_RESULT
 
 
 
