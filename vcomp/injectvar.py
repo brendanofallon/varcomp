@@ -44,7 +44,7 @@ def result_from_tuple(tup):
 
 
 
-def process_variant(variant, conf, homs):
+def process_variant(variant, conf, homs, keep_tmpdir=False):
     """
     Process the given variant by creating a fake 'genome' with the variant, simulating reads from it,
      aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
@@ -80,12 +80,16 @@ def process_variant(variant, conf, homs):
             variants[caller] = vars
 
 
-        remove_tmpdir = True
+        remove_tmpdir = not keep_tmpdir
+        tmpdir_suffix = ""
         for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
             normed_orig_vars = normalizer(orig_vcf, conf)
 
             for caller in variants:
                 normed_caller_vars = normalizer(variants[caller], conf)
+
+                vcfeval_result = None #Special case code here for flagging results where vgraph and vcfeval differ
+                vgraph_result = None
 
                 for comparator_name, comparator in comparators.get_comparators().iteritems():
                     result = comparator(normed_orig_vars, normed_caller_vars, bed, conf)
@@ -97,23 +101,42 @@ def process_variant(variant, conf, homs):
                             if vcf_gt in "0/1":
                                 result_str = ZYGOSITY_EXTRA_ALLELE
                                 remove_tmpdir = False
+                                tmpdir_suffix = caller + "-" + normalizer_name + "-extra-allele"
                             else:
                                 result_str = ZYGOSITY_MISSING_ALLELE
                                 remove_tmpdir = False
+                                tmpdir_suffix = caller + "-" + normalizer_name + "-missing-allele"
+                    if comparator_name == "vgraph:":
+                        vgraph_result = result_str
+                    if comparator_name == "vcfeval:":
+                        vcfeval_result = result_str
+                    if vcfeval_result is not None and vgraph_result is not None and vcfeval_result != vgraph_result:
+                        remove_tmpdir = False
+                        tmpdir_suffix = caller + "-" + normalizer_name + "-comp-conflict"
+                        with open("conflict.info.txt", "a") as fh:
+                            fh.write(caller + "\t" + normalizer_name + "\tvgraph: " + vgraph_result + "\tvcfeval: " + vcfeval_result + "\n")
+
                     print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result_str
     except Exception as ex:
         print "Error processing variant " + str(variant) + " : " + str(ex)
         tb.print_exc(file=sys.stdout)
         remove_tmpdir = False
+        tmpdir_suffix = "error"
+        try:
+            with open("exception.info.txt", "a") as fh:
+                fh.write(str(ex) + "\n")
+        except:
+            #we tried...
+            pass
 
     os.chdir("..")
     if remove_tmpdir:
         os.system("rm -rf " + tmpdir)
     else:
-        dirname = "tmpdir-chr" + variant.chrom + "-" + str(variant.start)
+        dirname = "tmpdir-chr" + variant.chrom + "-" + str(variant.start) + "-" + tmpdir_suffix
         os.system("mv " + tmpdir + " " + dirname)
 
-def process_vcf(input_vcf, homs, conf):
+def process_vcf(input_vcf, homs, conf, keep_tmpdir=False):
     """
     Iterate over entire vcf file, processing each variant individually and collecting results
     :param input_vcf:
@@ -121,19 +144,18 @@ def process_vcf(input_vcf, homs, conf):
     :return:
     """
     input_vcf = pysam.VariantFile(input_vcf)
-
-
     for input_var in input_vcf:
-        process_variant(input_var, conf, homs)
+        process_variant(input_var, conf, homs, keep_tmpdir)
 
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser("Inject, simulate, call, compare")
     parser.add_argument("-c", "--conf", help="Path to configuration file", default="./comp.conf")
     parser.add_argument("-v", "--vcf", help="Input vcf file")
+    parser.add_argument("-k", "--keep", help="Dont delete temporary directories", action='store_true')
     parser.add_argument("--het", help="Run all variants as hets (default false, run everything as homs)", action='store_true')
     args = parser.parse_args()
 
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
-    process_vcf(args.vcf, not args.het, conf)
+    process_vcf(args.vcf, not args.het, conf, args.keep)

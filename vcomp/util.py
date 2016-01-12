@@ -18,8 +18,6 @@ def bgz_tabix(path, conf):
         subprocess.check_call(cmd.split())
     except Exception as ex:
         raise ex
-
-
     return path
 
 
@@ -44,6 +42,8 @@ def set_genotypes(orig_vcf, newGT, conf):
             if len(toks)<10:
                 ofh.write(line)
             else:
+                if "," in toks[4]:
+                    raise ValueError('Cant set GT for multi-alt variants.')
                 infoitems = [newGT]
                 if ':' in toks[9]:
                     infoitems.extend(toks[9].strip().split(':')[1:] )

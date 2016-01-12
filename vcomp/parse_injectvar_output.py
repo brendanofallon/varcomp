@@ -5,6 +5,7 @@ import injectvar
 results_by_method = {}
 results = {}
 vgraph_vcfeval_mismatches = []
+normalizer_issues = []
 all_methods = []
 all_comp_methods = []
 
@@ -23,10 +24,25 @@ def find_vgraph_vcfeval_mismatches(var_results, var):
     mismatches = []
     for caller in var_results:
         for norm_method in var_results[caller]:
-            if "vgraph:" in var_results[caller][norm_method] and "vcfeval:" in var_results[caller][norm_method]:
+            if "vgraph:" in var_results[caller][norm_method] and "vcfeval:" in var_results[caller][norm_method] and var_results[caller][norm_method]["vcfeval:"] != injectvar.NO_VARS_FOUND_RESULT:
                 if var_results[caller][norm_method]["vgraph:"] != var_results[caller][norm_method]["vcfeval:"]:
                     mismatches.append( (caller, norm_method, var, var_results[caller][norm_method]["vgraph:"], var_results[caller][norm_method]["vcfeval:"]) )
     return mismatches
+
+
+def find_normalizer_breaks(var_results, var):
+    breaks = []
+    comp_method = "vgraph:"
+    for caller in var_results:
+        res = None
+        res_method = None
+        for norm_method in var_results[caller]:
+            if res is None:
+                res = var_results[caller][norm_method][comp_method]
+                res_method = norm_method
+            if var_results[caller][norm_method][comp_method] != res:
+                breaks.append( (caller, norm_method, var, var_results[caller][norm_method][comp_method], res_method + "=" +res) )
+    return breaks
 
 #Build big dict with all results, organized by caller and then method and then result type
 
@@ -36,7 +52,7 @@ for line in open(sys.argv[1], "r"):
     if line.startswith("Result for"):
 
         toks=line.strip().split(' ', 12)
-        if len(toks)<10:
+        if len(toks)<12:
             continue
         ref = toks[5]
         alt = toks[6].replace(":", "")
@@ -48,6 +64,7 @@ for line in open(sys.argv[1], "r"):
 
         if thisvar != prev_var:
             vgraph_vcfeval_mismatches.extend( find_vgraph_vcfeval_mismatches(var_results, prev_var))
+            normalizer_issues.extend( find_normalizer_breaks(var_results, prev_var))
             var_results = {}
             prev_var = thisvar
 
@@ -95,7 +112,10 @@ for caller in results:
             #     if result in results[caller][norm_method][comp_method]:
             #         tot += results[caller][norm_method][comp_method][result]
             for result in sorted(injectvar.all_result_types):
-                print formatted(results[caller][norm_method][comp_method], 1, result),
+                try:
+                    print formatted(results[caller][norm_method][comp_method], 1, result),
+                except:
+                    pass
             print "\n",
 
 
@@ -153,3 +173,7 @@ for caller in results:
 print "\n\n vgraph / vcfeval mismatches:"
 for mismatch in vgraph_vcfeval_mismatches:
     print mismatch[1] + "\t" + mismatch[0] + "\t" + mismatch[2] + " vgraph: " + mismatch[3] + "  vcfeval: " + mismatch[4]
+
+print "\n\n Normalizer changing vgraph results:"
+for case in normalizer_issues:
+    print "\t".join(list(case))

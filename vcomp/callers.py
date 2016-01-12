@@ -93,8 +93,8 @@ def call_variant_rtg(bam, orig_genome_path, bed, conf=None):
 def get_callers():
     return {
         "freebayes": call_variant_fb,
-        "platypus": call_variant_platypus,
-        "rtg": call_variant_rtg,
+        # "platypus": call_variant_platypus,
+        # "rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,
         "gatk-ug": call_variant_gatk_ug,
         #"wecall": call_wecall
