@@ -160,11 +160,9 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
 
     #First, test to see if there are any vars present...
     orig_vars = read_all_vars(orig_vcf, bed)
-    orig_var_count = len(orig_vars)
     caller_vars = read_all_vars(caller_vcf, bed)
-    caller_var_count = len(caller_vars)
-    if orig_var_count > 0 and caller_var_count == 0:
-        return injectvar.NO_VARS_FOUND_RESULT
+    if len(caller_vars)==0:
+        return (read_all_vars(orig_vcf, bed), [], caller_vars)
 
     bedcmd = ""
     if bed is not None:

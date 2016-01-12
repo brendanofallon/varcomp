@@ -5,6 +5,7 @@ import injectvar
 results_by_method = {}
 results = {}
 vgraph_vcfeval_mismatches = []
+normalizer_issues = []
 all_methods = []
 all_comp_methods = []
 
@@ -22,10 +23,26 @@ def formatted(results, tot, result):
 def find_vgraph_vcfeval_mismatches(var_results, var):
     mismatches = []
     for caller in var_results:
-        if "vgraph:" in var_results[caller] and "vcfeval:" in var_results[caller]:
-            if var_results[caller]["vgraph:"] != var_results[caller]["vcfeval:"]:
-                mismatches.append( (caller, var, var_results[caller]["vgraph:"], var_results[caller]["vcfeval:"]) )
+        for norm_method in var_results[caller]:
+            if "vgraph:" in var_results[caller][norm_method] and "vcfeval:" in var_results[caller][norm_method] and var_results[caller][norm_method]["vcfeval:"] != injectvar.NO_VARS_FOUND_RESULT:
+                if var_results[caller][norm_method]["vgraph:"] != var_results[caller][norm_method]["vcfeval:"]:
+                    mismatches.append( (caller, norm_method, var, var_results[caller][norm_method]["vgraph:"], var_results[caller][norm_method]["vcfeval:"]) )
     return mismatches
+
+
+def find_normalizer_breaks(var_results, var):
+    breaks = []
+    comp_method = "vgraph:"
+    for caller in var_results:
+        res = None
+        res_method = None
+        for norm_method in var_results[caller]:
+            if res is None:
+                res = var_results[caller][norm_method][comp_method]
+                res_method = norm_method
+            if var_results[caller][norm_method][comp_method] != res:
+                breaks.append( (caller, norm_method, var, var_results[caller][norm_method][comp_method], res_method + "=" +res) )
+    return breaks
 
 #Build big dict with all results, organized by caller and then method and then result type
 
@@ -35,7 +52,7 @@ for line in open(sys.argv[1], "r"):
     if line.startswith("Result for"):
 
         toks=line.strip().split(' ', 12)
-        if len(toks)<10:
+        if len(toks)<12:
             continue
         ref = toks[5]
         alt = toks[6].replace(":", "")
@@ -47,6 +64,7 @@ for line in open(sys.argv[1], "r"):
 
         if thisvar != prev_var:
             vgraph_vcfeval_mismatches.extend( find_vgraph_vcfeval_mismatches(var_results, prev_var))
+            normalizer_issues.extend( find_normalizer_breaks(var_results, prev_var))
             var_results = {}
             prev_var = thisvar
 
@@ -94,7 +112,10 @@ for caller in results:
             #     if result in results[caller][norm_method][comp_method]:
             #         tot += results[caller][norm_method][comp_method][result]
             for result in sorted(injectvar.all_result_types):
-                print formatted(results[caller][norm_method][comp_method], 1, result),
+                try:
+                    print formatted(results[caller][norm_method][comp_method], 1, result),
+                except:
+                    pass
             print "\n",
 
 
@@ -119,7 +140,7 @@ for caller in results:
 print "\nCaller err breakdown: mismatch / extra allele / missing allele / no variant found"
 
 norm_method = "nonorm"
-comp_method = "vgraph:"
+comp_method = "vcfeval:"
 print "\t" + norm_method
 for caller in results:
     print caller + "\t",
@@ -133,22 +154,26 @@ for caller in results:
     print formatted(results[caller][norm_method][comp_method], 1, injectvar.NO_VARS_FOUND_RESULT),
     print "\n",
 
-print "\n\nMatcher comparison: (=matches / (matches + not matched))"
-for norm_method in sorted(all_methods):
-    print "\t" + norm_method,
-print "\n",
-
-for caller in results:
-    print caller + "\t",
-    for norm_method in sorted(all_methods):
-        tot = 0.0
-        for result in sorted(injectvar.var_result_types):
-            if result in results[caller][norm_method]:
-                tot += results[caller][norm_method][result]
-        print formatted(results[caller][norm_method], 1, injectvar.MATCH_RESULT),
-    print "\n",
+# print "\n\nMatcher comparison: (=matches / (matches + not matched))"
+# for norm_method in sorted(all_methods):
+#     print "\t" + norm_method,
+# print "\n",
+#
+# for caller in results:
+#     print caller + "\t",
+#     for norm_method in sorted(all_methods):
+#         tot = 0.0
+#         for result in sorted(injectvar.var_result_types):
+#             if result in results[caller][norm_method]:
+#                 tot += results[caller][norm_method][result]
+#         print formatted(results[caller][norm_method], 1, injectvar.MATCH_RESULT),
+#     print "\n",
 
 
 print "\n\n vgraph / vcfeval mismatches:"
 for mismatch in vgraph_vcfeval_mismatches:
-    print mismatch[1] + "\t" + mismatch[0] + "\t" + " vgraph: " + mismatch[2] + "  vcfeval: " + mismatch[3]
+    print mismatch[1] + "\t" + mismatch[0] + "\t" + mismatch[2] + " vgraph: " + mismatch[3] + "  vcfeval: " + mismatch[4]
+
+print "\n\n Normalizer changing vgraph results:"
+for case in normalizer_issues:
+    print "\t".join(list(case))
