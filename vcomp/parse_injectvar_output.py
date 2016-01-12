@@ -22,9 +22,10 @@ def formatted(results, tot, result):
 def find_vgraph_vcfeval_mismatches(var_results, var):
     mismatches = []
     for caller in var_results:
-        if "vgraph:" in var_results[caller] and "vcfeval:" in var_results[caller]:
-            if var_results[caller]["vgraph:"] != var_results[caller]["vcfeval:"]:
-                mismatches.append( (caller, var, var_results[caller]["vgraph:"], var_results[caller]["vcfeval:"]) )
+        for norm_method in var_results[caller]:
+            if "vgraph:" in var_results[caller][norm_method] and "vcfeval:" in var_results[caller][norm_method]:
+                if var_results[caller][norm_method]["vgraph:"] != var_results[caller][norm_method]["vcfeval:"]:
+                    mismatches.append( (caller, norm_method, var, var_results[caller][norm_method]["vgraph:"], var_results[caller][norm_method]["vcfeval:"]) )
     return mismatches
 
 #Build big dict with all results, organized by caller and then method and then result type
@@ -119,7 +120,7 @@ for caller in results:
 print "\nCaller err breakdown: mismatch / extra allele / missing allele / no variant found"
 
 norm_method = "nonorm"
-comp_method = "vgraph:"
+comp_method = "vcfeval:"
 print "\t" + norm_method
 for caller in results:
     print caller + "\t",
@@ -151,4 +152,4 @@ for caller in results:
 
 print "\n\n vgraph / vcfeval mismatches:"
 for mismatch in vgraph_vcfeval_mismatches:
-    print mismatch[1] + "\t" + mismatch[0] + "\t" + " vgraph: " + mismatch[2] + "  vcfeval: " + mismatch[3]
+    print mismatch[1] + "\t" + mismatch[0] + "\t" + mismatch[2] + " vgraph: " + mismatch[3] + "  vcfeval: " + mismatch[4]
