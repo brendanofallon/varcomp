@@ -133,20 +133,20 @@ for caller in results:
     print formatted(results[caller][norm_method][comp_method], 1, injectvar.NO_VARS_FOUND_RESULT),
     print "\n",
 
-print "\n\nMatcher comparison: (=matches / (matches + not matched))"
-for norm_method in sorted(all_methods):
-    print "\t" + norm_method,
-print "\n",
-
-for caller in results:
-    print caller + "\t",
-    for norm_method in sorted(all_methods):
-        tot = 0.0
-        for result in sorted(injectvar.var_result_types):
-            if result in results[caller][norm_method]:
-                tot += results[caller][norm_method][result]
-        print formatted(results[caller][norm_method], 1, injectvar.MATCH_RESULT),
-    print "\n",
+# print "\n\nMatcher comparison: (=matches / (matches + not matched))"
+# for norm_method in sorted(all_methods):
+#     print "\t" + norm_method,
+# print "\n",
+#
+# for caller in results:
+#     print caller + "\t",
+#     for norm_method in sorted(all_methods):
+#         tot = 0.0
+#         for result in sorted(injectvar.var_result_types):
+#             if result in results[caller][norm_method]:
+#                 tot += results[caller][norm_method][result]
+#         print formatted(results[caller][norm_method], 1, injectvar.MATCH_RESULT),
+#     print "\n",
 
 
 print "\n\n vgraph / vcfeval mismatches:"
