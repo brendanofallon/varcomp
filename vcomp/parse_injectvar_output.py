@@ -6,6 +6,7 @@ results_by_method = {}
 results = {}
 vgraph_vcfeval_mismatches = []
 normalizer_issues = []
+vap_fails = []
 all_methods = []
 all_comp_methods = []
 
@@ -44,6 +45,22 @@ def find_normalizer_breaks(var_results, var):
                 breaks.append( (caller, norm_method, var, var_results[caller][norm_method][comp_method], res_method + "=" +res) )
     return breaks
 
+
+def find_vapfails_vgraph_hits(var_results, var):
+    fixes = []
+    for caller in var_results:
+        try:
+            vap_result = var_results[caller]["vapleft"]["raw:"]
+            vcfeval_result = var_results[caller]["nonorm"]["vcfeval:"]
+            if vap_result != vcfeval_result:
+                fixes.append( (caller, var, "vap/leftalign:" + vap_result, "vcfeval:" + vcfeval_result))
+        except KeyError:
+            pass
+    return fixes
+
+
+
+
 #Build big dict with all results, organized by caller and then method and then result type
 
 var_results = {} #Stores all results for a single variant, helps comparing results for a single var
@@ -65,6 +82,7 @@ for line in open(sys.argv[1], "r"):
         if thisvar != prev_var:
             vgraph_vcfeval_mismatches.extend( find_vgraph_vcfeval_mismatches(var_results, prev_var))
             normalizer_issues.extend( find_normalizer_breaks(var_results, prev_var))
+            vap_fails.extend( find_vapfails_vgraph_hits(var_results, prev_var))
             var_results = {}
             prev_var = thisvar
 
@@ -121,7 +139,7 @@ for caller in results:
 
 print "\nCaller comparison: (=matches / (matches + not matched + no vars found + incorrect genotypes))"
 
-comp_methods = ("vgraph:", "vcfeval:")
+comp_methods = ("vcfeval:",)
 norm_method = "nonorm"
 for comp_method in comp_methods:
     print "\t" + comp_method,
@@ -130,11 +148,11 @@ print ""
 for caller in results:
     print caller + "\t",
     for comp_method in comp_methods:
-        # tot = 0.0
-        # for result in sorted(injectvar.all_result_types):
-        #     if result in results[caller][norm_method][comp_method]:
-        #         tot += results[caller][norm_method][comp_method][result]
-        print formatted(results[caller][norm_method][comp_method], 1, injectvar.MATCH_RESULT),
+        tot = 0.0
+        for result in sorted(injectvar.all_result_types):
+            if result in results[caller][norm_method][comp_method]:
+                tot += results[caller][norm_method][comp_method][result]
+        print formatted(results[caller][norm_method][comp_method], tot, injectvar.MATCH_RESULT),
     print "\n",
 
 print "\nCaller err breakdown: mismatch / extra allele / missing allele / no variant found"
@@ -144,14 +162,14 @@ comp_method = "vcfeval:"
 print "\t" + norm_method
 for caller in results:
     print caller + "\t",
-    # tot = 0.0
-    # for result in sorted(injectvar.all_result_types):
-    #     if result in results[caller][norm_method][comp_method]:
-    #         tot += results[caller][norm_method][comp_method][result]
-    print formatted(results[caller][norm_method][comp_method], 1, injectvar.NO_MATCH_RESULT),
-    print formatted(results[caller][norm_method][comp_method], 1, injectvar.ZYGOSITY_EXTRA_ALLELE),
-    print formatted(results[caller][norm_method][comp_method], 1, injectvar.ZYGOSITY_MISSING_ALLELE),
-    print formatted(results[caller][norm_method][comp_method], 1, injectvar.NO_VARS_FOUND_RESULT),
+    tot = 0.0
+    for result in sorted(injectvar.all_result_types):
+        if result in results[caller][norm_method][comp_method]:
+            tot += results[caller][norm_method][comp_method][result]
+    print formatted(results[caller][norm_method][comp_method], tot, injectvar.NO_MATCH_RESULT),
+    print formatted(results[caller][norm_method][comp_method], tot, injectvar.ZYGOSITY_EXTRA_ALLELE),
+    print formatted(results[caller][norm_method][comp_method], tot, injectvar.ZYGOSITY_MISSING_ALLELE),
+    print formatted(results[caller][norm_method][comp_method], tot, injectvar.NO_VARS_FOUND_RESULT),
     print "\n",
 
 # print "\n\nMatcher comparison: (=matches / (matches + not matched))"
@@ -176,4 +194,8 @@ for mismatch in vgraph_vcfeval_mismatches:
 
 print "\n\n Normalizer changing vgraph results:"
 for case in normalizer_issues:
+    print "\t".join(list(case))
+
+print "\n\n VAP/leftalign fails, fixed by vcfeval:"
+for case in vap_fails:
     print "\t".join(list(case))
