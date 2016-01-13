@@ -106,9 +106,9 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
                                 result_str = ZYGOSITY_MISSING_ALLELE
                                 remove_tmpdir = False
                                 tmpdir_suffix = caller + "-" + normalizer_name + "-missing-allele"
-                    if comparator_name == "vgraph:":
+                    if comparator_name == "vgraph":
                         vgraph_result = result_str
-                    if comparator_name == "vcfeval:":
+                    if comparator_name == "vcfeval":
                         vcfeval_result = result_str
                     if vcfeval_result is not None and vgraph_result is not None and vcfeval_result != vgraph_result:
                         remove_tmpdir = False
