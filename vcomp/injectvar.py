@@ -56,7 +56,7 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
     :return:
     """
 
-    tmpdir = "tmp-working" + str(time.time())[-7:].replace(".", "")
+    tmpdir = "tmp-working-" + util.randstr()
     try:
         os.mkdir(tmpdir)
     except:
