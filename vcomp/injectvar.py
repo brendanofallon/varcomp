@@ -4,7 +4,6 @@ import ConfigParser as cp
 import argparse
 import os
 import sys
-import time
 import traceback as tb
 import util
 import pysam
@@ -15,13 +14,14 @@ import bam_simulation, callers, comparators, normalizers
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
 NO_MATCH_RESULT="Variants did not match"
+MATCH_WITH_EXTRA_RESULT= "Additional false variants present"
 
 ZYGOSITY_MATCH="Zygosity match"
 ZYGOSITY_EXTRA_ALLELE="Extra allele"
 ZYGOSITY_MISSING_ALLELE="Missing allele"
 ZYGOSITY_MISSING_TWO_ALLELES="Missing two alleles!"
 
-all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
+all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, MATCH_WITH_EXTRA_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
 
 def result_from_tuple(tup):
     """
@@ -37,6 +37,9 @@ def result_from_tuple(tup):
     #ONLY return a match if everything matches perfectly
     if len(unmatched_orig)==0 and len(unmatched_caller)==0 and len(matches)>0:
         return MATCH_RESULT
+
+    if len(unmatched_orig)==0 and len(matches)>0 and len(unmatched_caller)>0:
+        return MATCH_WITH_EXTRA_RESULT
 
     if len(unmatched_orig)>0 and len(matches)==0:
         if len(unmatched_caller)>0:
