@@ -33,13 +33,17 @@ def result_from_tuple(tup):
     unmatched_orig = tup[0]
     matches = tup[1]
     unmatched_caller = tup[2]
+
+    #ONLY return a match if everything matches perfectly
+    if len(unmatched_orig)==0 and len(unmatched_caller)==0 and len(matches)>0:
+        return MATCH_RESULT
+
     if len(unmatched_orig)>0 and len(matches)==0:
         if len(unmatched_caller)>0:
             return NO_MATCH_RESULT
         else:
             return NO_VARS_FOUND_RESULT
-    if len(unmatched_orig)==0 and len(matches)>0:
-        return MATCH_RESULT
+
     return NO_MATCH_RESULT
 
 
@@ -106,6 +110,7 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
                                 result_str = ZYGOSITY_MISSING_ALLELE
                                 remove_tmpdir = False
                                 tmpdir_suffix = caller + "-" + normalizer_name + "-missing-allele"
+
                     if comparator_name == "vgraph":
                         vgraph_result = result_str
                     if comparator_name == "vcfeval":
