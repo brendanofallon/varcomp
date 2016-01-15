@@ -2,6 +2,11 @@
 import subprocess
 import gzip
 import time
+import random
+import string
+
+def randstr(length=8):
+    return "".join([random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(length)])
 
 def bgz_tabix(path, conf):
     """

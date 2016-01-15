@@ -4,7 +4,6 @@ import ConfigParser as cp
 import argparse
 import os
 import sys
-import time
 import traceback as tb
 import util
 import pysam
@@ -15,13 +14,14 @@ import bam_simulation, callers, comparators, normalizers
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
 NO_MATCH_RESULT="Variants did not match"
+MATCH_WITH_EXTRA_RESULT= "Additional false variants present"
 
 ZYGOSITY_MATCH="Zygosity match"
 ZYGOSITY_EXTRA_ALLELE="Extra allele"
 ZYGOSITY_MISSING_ALLELE="Missing allele"
 ZYGOSITY_MISSING_TWO_ALLELES="Missing two alleles!"
 
-all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
+all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, MATCH_WITH_EXTRA_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
 
 def result_from_tuple(tup):
     """
@@ -33,13 +33,20 @@ def result_from_tuple(tup):
     unmatched_orig = tup[0]
     matches = tup[1]
     unmatched_caller = tup[2]
+
+    #ONLY return a match if everything matches perfectly
+    if len(unmatched_orig)==0 and len(unmatched_caller)==0 and len(matches)>0:
+        return MATCH_RESULT
+
+    if len(unmatched_orig)==0 and len(matches)>0 and len(unmatched_caller)>0:
+        return MATCH_WITH_EXTRA_RESULT
+
     if len(unmatched_orig)>0 and len(matches)==0:
         if len(unmatched_caller)>0:
             return NO_MATCH_RESULT
         else:
             return NO_VARS_FOUND_RESULT
-    if len(unmatched_orig)==0 and len(matches)>0:
-        return MATCH_RESULT
+
     return NO_MATCH_RESULT
 
 
@@ -56,7 +63,7 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
     :return:
     """
 
-    tmpdir = "tmp-working" + str(time.time())[-7:].replace(".", "")
+    tmpdir = "tmp-working-" + util.randstr()
     try:
         os.mkdir(tmpdir)
     except:
@@ -106,6 +113,7 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
                                 result_str = ZYGOSITY_MISSING_ALLELE
                                 remove_tmpdir = False
                                 tmpdir_suffix = caller + "-" + normalizer_name + "-missing-allele"
+
                     if comparator_name == "vgraph":
                         vgraph_result = result_str
                     if comparator_name == "vcfeval":
