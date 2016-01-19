@@ -50,6 +50,49 @@ def result_from_tuple(tup):
     return NO_MATCH_RESULT
 
 
+def should_keep_dir(var_res, var):
+    """
+    Decide whether or not to flag the analysis dir for this variant for non-deletion (usually, we delete all tmp dirs)
+    :param var_res: 3 layer dict of the form [caller][normalizer][comparator] containing results strings
+    :param var: variant
+    :return: Tuple of (boolean, suffix, comment), boolean indicates keep or not, suffix is applied to the tmpdir, comment is written to a file in the dir
+    """
+    #Want to flag following situations:
+    #vgraph / vcfeval / happy disagree on anything
+    #variant match with nonorm, but mismatch with vapleft or vt
+    #variant mismatch with vapleft / raw but correctly matched with vgraph / vcfeval / etc
+
+    keep = False
+    suffix = None
+    comment = None
+
+    for caller in var_res:
+        for norm in var_res[caller]:
+
+            vgraph_result = var_res[caller][norm]["vgraph"]
+            vcfeval_result = var_res[caller][norm]["vcfeval"]
+            happy_result = var_res[caller][norm]["happy"]
+
+            if vgraph_result != vcfeval_result or vcfeval_result != happy_result:
+                keep = True
+                suffix = "comp-mismatch"
+                comment = "\n".join(["caller: " + caller, "norm:" + norm, "vgraph:" + vgraph_result, "vcfeval:" + vcfeval_result, "happy:"+ happy_result])
+
+        nonorm_vcfeval_result = var_res[caller]["nonorm"]["vcfeval"]
+        vap_vcfeval_result = var_res[caller]["vapleft"]["vcfeval"]
+        vap_raw_result = var_res[caller]["vapleft"]["raw"]
+
+        if nonorm_vcfeval_result == MATCH_RESULT and vap_vcfeval_result != MATCH_RESULT:
+            keep = True
+            suffix = "vapleft-broken"
+            comment = "\n".join(["caller: " + caller, "nonorm / vcfeval:" + nonorm_vcfeval_result, "vapleft / vcfeval:" + vap_vcfeval_result])
+
+        if vap_raw_result != MATCH_RESULT and nonorm_vcfeval_result == MATCH_RESULT:
+            keep = True
+            suffix = "vapleft-failed"
+            comment = "\n".join(["caller: " + caller, "vapleft / raw:" + vap_raw_result, "nonorm / vcfeval:" + nonorm_vcfeval_result])
+
+    return (keep, suffix, comment)
 
 def process_variant(variant, conf, homs, keep_tmpdir=False):
     """
@@ -80,11 +123,14 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
         bed = callers.vars_to_bed([variant])
         bam = bam_simulation.gen_alt_bam(ref_path, [variant], conf, homs)
 
+        var_results = {}
         variant_callers = callers.get_callers()
         variants = {}
+
         for caller in variant_callers:
             vars = variant_callers[caller](bam, ref_path, bed, conf)
             variants[caller] = vars
+            var_results[caller] = {}
 
 
         remove_tmpdir = not keep_tmpdir
@@ -93,10 +139,8 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
             normed_orig_vars = normalizer(orig_vcf, conf)
 
             for caller in variants:
+                var_results[caller][normalizer_name] = {}
                 normed_caller_vars = normalizer(variants[caller], conf)
-
-                vcfeval_result = None #Special case code here for flagging results where vgraph and vcfeval differ
-                vgraph_result = None
 
                 for comparator_name, comparator in comparators.get_comparators().iteritems():
                     result = comparator(normed_orig_vars, normed_caller_vars, bed, conf)
@@ -113,18 +157,17 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
                                 result_str = ZYGOSITY_MISSING_ALLELE
                                 remove_tmpdir = False
                                 tmpdir_suffix = caller + "-" + normalizer_name + "-missing-allele"
-
-                    if comparator_name == "vgraph":
-                        vgraph_result = result_str
-                    if comparator_name == "vcfeval":
-                        vcfeval_result = result_str
-                    if vcfeval_result is not None and vgraph_result is not None and vcfeval_result != vgraph_result:
-                        remove_tmpdir = False
-                        tmpdir_suffix = caller + "-" + normalizer_name + "-comp-conflict"
-                        with open("conflict.info.txt", "a") as fh:
-                            fh.write(caller + "\t" + normalizer_name + "\tvgraph: " + vgraph_result + "\tvcfeval: " + vcfeval_result + "\n")
+                    var_results[caller][normalizer_name][comparator_name] = result_str
 
                     print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result_str
+
+        keep, suffix, comment = should_keep_dir(var_results, variant)
+        if keep:
+            remove_tmpdir = False
+            tmpdir_suffix = suffix
+            with open("flag.info.txt", "a") as fh:
+                fh.write(str(comment) + "\n")
+
     except Exception as ex:
         print "Error processing variant " + str(variant) + " : " + str(ex)
         tb.print_exc(file=sys.stdout)

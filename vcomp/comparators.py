@@ -5,7 +5,8 @@ import sys
 import os
 import time
 import injectvar
-
+import util
+import json
 
 
 ALLELE_MATCH="Alleles matched"
@@ -198,11 +199,42 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
     return (fn_vars, zip(orig_vars, tp_vars), fp_vars)
 
 
+def compare_happy(orig_vcf, caller_vcf, bed, conf):
+    caller_vars = read_all_vars(caller_vcf, bed)
+    if len(caller_vars)==0:
+        return (read_all_vars(orig_vcf, bed), [], caller_vars)
+    output_prefix = "happyoutput-" + util.randstr(6)
+
+    bedarg = ""
+    if bed is not None:
+        bedarg = " -T " + bed
+    cmd = conf.get('main', 'happy_path') + " " + orig_vcf + " " + caller_vcf + " " + bedarg + " -o " + output_prefix + " -r " + conf.get('main', 'ref_genome') + " -l " + caller_vars[0].chrom + " --no-fixchr-truth --no-fixchr-query -V"
+    ignored = subprocess.check_output(cmd, shell=True)
+
+    orig_unmatched = []
+    matches = []
+    caller_unmatched = []
+
+    for var in pysam.VariantFile(output_prefix + ".vcf.gz"):
+        vstr = str(var)
+        if "type=FP" in vstr:
+            caller_unmatched.append(var)
+        elif "type=TP" in vstr:
+            matches.append( (var, var) )
+        elif "type=FN" in vstr:
+            orig_unmatched.append(var)
+        else:
+            raise ValueError('Unable to parse hap.py variant type: ' + vstr)
+    return (orig_unmatched, matches, caller_unmatched)
+
+
+
 def get_comparators():
     return {
         "raw": compare_raw,
         "vgraph": compare_vgraph,
-        "vcfeval": compare_vcfeval
+        "vcfeval": compare_vcfeval,
+        "happy": compare_happy
     }
 
 
