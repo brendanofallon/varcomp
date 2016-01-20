@@ -121,7 +121,8 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
         ref_path = conf.get('main', 'ref_genome')
 
         bed = callers.vars_to_bed([variant])
-        bam = bam_simulation.gen_alt_bam(ref_path, [variant], conf, homs)
+        reads = bam_simulation.gen_alt_fq(ref_path, [variant], homs=True, depth=250)
+        bam = bam_simulation.gen_alt_bam(ref_path, conf, reads)
 
         var_results = {}
         variant_callers = callers.get_callers()
