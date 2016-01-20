@@ -208,7 +208,7 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
     bedarg = ""
     if bed is not None:
         bedarg = " -T " + bed
-    cmd = conf.get('main', 'happy_path') + " " + orig_vcf + " " + caller_vcf + " " + bedarg + " -o " + output_prefix + " -r " + conf.get('main', 'ref_genome') + " -l " + caller_vars[0].chrom + " --no-fixchr-truth --no-fixchr-query -V"
+    cmd = conf.get('main', 'happy_path') + " " + orig_vcf + " " + caller_vcf + " " + bedarg + " -o " + output_prefix + " --include-nonpass -r " + conf.get('main', 'ref_genome') + " -l " + caller_vars[0].chrom + " --no-fixchr-truth --no-fixchr-query -V"
     ignored = subprocess.check_output(cmd, shell=True)
 
     orig_unmatched = []
