@@ -35,14 +35,17 @@ def find_normalizer_breaks(var_results, var):
     breaks = []
     comp_method = "vgraph:"
     for caller in var_results:
-        res = None
-        res_method = None
-        for norm_method in var_results[caller]:
-            if res is None:
-                res = var_results[caller][norm_method][comp_method]
-                res_method = norm_method
-            if var_results[caller][norm_method][comp_method] != res:
-                breaks.append( (caller, norm_method, var, var_results[caller][norm_method][comp_method], res_method + "=" +res) )
+        try:
+            res = None
+            res_method = None
+            for norm_method in var_results[caller]:
+                if res is None:
+                    res = var_results[caller][norm_method][comp_method]
+                    res_method = norm_method
+                if var_results[caller][norm_method][comp_method] != res:
+                    breaks.append( (caller, norm_method, var, var_results[caller][norm_method][comp_method], res_method + "=" +res) )
+        except:
+            pass
     return breaks
 
 
