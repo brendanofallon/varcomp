@@ -64,7 +64,7 @@ def call_wecall(bam, orig_genome_path, bed, conf=None):
 def call_variant_gatk_hc(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-hc.vcf"
     err = open("/dev/null")
-    cmd="java -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T HaplotypeCaller -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
+    cmd="java -Xmx1g -Djava.io.tmpdir=. -jar " + conf.get('main', 'gatk_path') + " -T HaplotypeCaller -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
     #print "Executing " + cmd
     subprocess.check_output(cmd, shell=True, stderr=err)
     err.close()
