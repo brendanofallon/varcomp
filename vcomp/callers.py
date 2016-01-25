@@ -74,7 +74,7 @@ def call_variant_gatk_hc(bam, orig_genome_path, bed, conf=None):
 def call_variant_gatk_ug(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-ug.vcf"
     err = open("/dev/null")
-    cmd="java -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T UnifiedGenotyper -glm BOTH -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
+    cmd="java -Xmx1g -Djava.io.tmpdir=. -jar " + conf.get('main', 'gatk_path') + " -T UnifiedGenotyper -glm BOTH -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
     #print "Executing " + cmd
     subprocess.check_output(cmd, shell=True, stderr=err)
     err.close()
@@ -84,7 +84,7 @@ def call_variant_gatk_ug(bam, orig_genome_path, bed, conf=None):
 def call_variant_rtg(bam, orig_genome_path, bed, conf=None):
     output_dir = "rtg-output-" + str(time.time()).replace(".", "")[-7:]
     vcfoutput = output_dir + "/snps.vcf.gz"
-    cmd=["java", "-jar", conf.get('main', 'rtg_jar'), "snp", "-t", conf.get('main', 'rtg_ref_sdf'), "--bed-regions", bed, "-o", output_dir, bam]
+    cmd=["java", "-Djava.io.tmpdir=.", "-jar", conf.get('main', 'rtg_jar'), "snp", "-t", conf.get('main', 'rtg_ref_sdf'), "--bed-regions", bed, "-o", output_dir, bam]
     subprocess.check_output(cmd)
     #vars = pysam.VariantFile(vcfoutput, "rb")
     return vcfoutput
@@ -92,11 +92,11 @@ def call_variant_rtg(bam, orig_genome_path, bed, conf=None):
 
 def get_callers():
     return {
-        # "freebayes": call_variant_fb,
-        # "platypus": call_variant_platypus,
-        # "rtg": call_variant_rtg,
+        "freebayes": call_variant_fb,
+        "platypus": call_variant_platypus,
+        "rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,
-        "wecall": call_wecall,
+        #"wecall": call_wecall,
         "gatk-ug": call_variant_gatk_ug
         #"wecall": call_wecall
         # "freebayes-mre": call_variant_fb_minrepeatentropy,
