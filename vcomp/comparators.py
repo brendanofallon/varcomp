@@ -6,7 +6,6 @@ import os
 import time
 import injectvar
 import util
-import json
 
 
 ALLELE_MATCH="Alleles matched"
@@ -14,90 +13,6 @@ ALLELE_MISMATCH="Alleles did not match"
 ALLELE_EXTRA="Additional variants identified"
 
 
-# all_result_types = (NO_VARS_FOUND_RESULT, MATCH_RESULT, INCORRECT_GENOTYPE_RESULT, NO_MATCH_RESULT)
-# genotype_result_types = (NO_VARS_FOUND_RESULT, INCORRECT_GENOTYPE_RESULT)
-# var_result_types = set(all_result_types)-set(genotype_result_types)
-
-
-HOM_REF_GT = "Hom ref."
-HET_GT = "Het"
-HOM_ALT_GT = "Hom alt."
-
-hom_ref_gts = ["0/0", "0|0"]
-het_gts = ["0/1", "1/0", "1|0", "0|1"]
-hom_alt_gts = ["1/1", "1|1"]
-
-
-
-class VariantCompResult(object):
-
-    def __init__(self, orig_vars, called_vars):
-        self.orig_vars = orig_vars
-        self.called_vars = called_vars
-        #Try to find matches among the orig_vars and the called vars, and keep track of which vars
-        #haven't been matched
-        (orig_unmatched, matches, called_unmatched) = self._match_vars()
-        self.orig_unmatched = orig_unmatched
-        self.matches = matches
-        self.called_unmatched = called_unmatched
-
-    @staticmethod
-    def from_raw(orig_unmatched, matched, called_unmatched):
-        """
-        Generate a new VariantCompResult object from variants that have already been matched - this is used
-        by vgraph and vcfeval callers which handle their own variant matching
-        :param orig_unmatched:
-        :param matched:
-        :param called_unmatched:
-        :return:
-        """
-        res = VariantCompResult([], [])
-        res.orig_unmatched = orig_unmatched
-        res.matches = matched
-        res.called_unmatched = called_unmatched
-        return res
-
-    def _match_vars(self):
-        matches = []
-        unmatched_orig = []
-        unmatched_caller = [v for v in self.called_vars]
-        for ovar in self.orig_vars:
-            match_found = False
-            for cvar in self.called_vars:
-                match_found = test_var_equiv(ovar, cvar)
-                if match_found:
-                    break
-            if match_found:
-                matches.append( (ovar, cvar) )
-                unmatched_caller.remove(cvar)
-            else:
-                unmatched_orig.append(ovar)
-
-        return (unmatched_orig, matches, unmatched_caller)
-
-    def match_count(self):
-        return len(self.matches)
-
-    def zygosity_calc(self):
-        return [comp_zyg(a,b) for a,b in self.matches]
-
-    def has_unmatched_orig(self):
-        return len(self.orig_unmatched)>0
-
-    def has_unmatched_caller(self):
-        return len(self.called_unmatched)>0
-
-    def __str__(self):
-        return "[" + str(len(self.orig_unmatched)) + ", " + str(len(self.matches)) + ", " + str(len(self.called_unmatched)) + "; " +  ",".join(self.zygosity_calc())  + "]"
-
-    def short(self):
-        if len(self.matches)>0 and len(self.orig_unmatched)==0 and len(self.called_unmatched)==0:
-            return injectvar.MATCH_RESULT
-        if len(self.matches)==0 and len(self.orig_unmatched)>0:
-            return injectvar.NO_MATCH_RESULT
-        if len(self.matches)==0 and len(self.orig_unmatched)==0 and len(self.called_unmatched)==0:
-            return injectvar.NO_VARS_FOUND_RESULT
-        return injectvar.PARTIAL_MATCH
 
 def comp_zyg(tvar, qvar):
     """
@@ -106,25 +21,23 @@ def comp_zyg(tvar, qvar):
     :param qvar: Query variant
     :return:
     """
-    t = get_first_gt(tvar)
-    q = get_first_gt(qvar)
-    if t == HET_GT:
-        if q == HET_GT:
+    t = util.get_first_gt(tvar)
+    q = util.get_first_gt(qvar)
+    if t == util.HET_GT:
+        if q == util.HET_GT:
             return injectvar.ZYGOSITY_MATCH
-        if q == HOM_ALT_GT:
+        if q == util.HOM_ALT_GT:
             return injectvar.ZYGOSITY_EXTRA_ALLELE
-        if q == HOM_REF_GT:
+        if q == util.HOM_REF_GT:
             return injectvar.ZYGOSITY_MISSING_ALLELE
-    if t == HOM_ALT_GT:
-        if q == HET_GT:
+    if t == util.HOM_ALT_GT:
+        if q == util.HET_GT:
             return injectvar.ZYGOSITY_MISSING_ALLELE
-        if q == HOM_ALT_GT:
+        if q == util.HOM_ALT_GT:
             return injectvar.ZYGOSITY_MATCH
-        if q == HOM_REF_GT:
+        if q == util.HOM_REF_GT:
             return injectvar.ZYGOSITY_MISSING_TWO_ALLELES
     raise ValueError('Should never get here - was true var Hom Ref?')
-
-
 
 
 def compare_raw(orig_vcf, caller_vcf, bed, conf):
@@ -278,28 +191,11 @@ def test_var_equiv(var1, var2):
     """
     alts1 = str([str(a) + "," for a in var1.alts])
     alts2 = str([str(a) +","  for a in var2.alts])
-    gt1 = get_first_gt(var1)
-    gt2 = get_first_gt(var2)
+    gt1 = util.get_first_gt(var1)
+    gt2 = util.get_first_gt(var2)
     return var1.chrom == var2.chrom and var1.start == var2.start and var1.ref == var2.ref and  alts1==alts2 and gt1 == gt2
 
 
-def get_first_gt(var):
-    """
-    Returns string version of GT field.. Hack until we can get pysam to work..
-    :param var:
-    """
-    toks = str(var).split()
-    if len(toks) <= 9:
-        return None
-
-    gt = toks[9].split(":")[0]
-    if gt in hom_ref_gts:
-        return HOM_REF_GT
-    if gt in hom_alt_gts:
-        return HOM_ALT_GT
-    if gt in het_gts:
-        return HET_GT
-    return gt
 
 
 

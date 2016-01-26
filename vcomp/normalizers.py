@@ -25,7 +25,7 @@ def normalize_vap_leftalign(orig_vcf, conf):
         fh.write(tmp_output)
 
 
-    cmd = "java -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T LeftAlignAndTrimVariants -R " + conf.get('main', 'ref_genome') + " -V " + tmp_vcf + " -o " + final_vcf
+    cmd = "java -Djava.io.tmpdir=. -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T LeftAlignAndTrimVariants -R " + conf.get('main', 'ref_genome') + " -V " + tmp_vcf + " -o " + final_vcf
     subprocess.check_output(cmd, shell=True)
     err.close()
 

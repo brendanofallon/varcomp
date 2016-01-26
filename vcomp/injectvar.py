@@ -7,6 +7,7 @@ import sys
 import traceback as tb
 import util
 import pysam
+import time
 
 import bam_simulation, callers, comparators, normalizers
 
@@ -50,7 +51,7 @@ def result_from_tuple(tup):
     return NO_MATCH_RESULT
 
 
-def should_keep_dir(var_res, var):
+def should_keep_dir(var_res):
     """
     Decide whether or not to flag the analysis dir for this variant for non-deletion (usually, we delete all tmp dirs)
     :param var_res: 3 layer dict of the form [caller][normalizer][comparator] containing results strings
@@ -94,13 +95,34 @@ def should_keep_dir(var_res, var):
 
     return (keep, suffix, comment)
 
-def process_variant(variant, conf, homs, keep_tmpdir=False):
+def compare_single_var(comparator, inputvar, normed_caller_vars, bedregion, inputgt, conf):
+    result = comparator(inputvar, normed_caller_vars, bedregion, conf)
+    result_str = result_from_tuple(result)
+    remove_tmpdir = True
+    tmpdir_suffix = ""
+    if result_str == NO_MATCH_RESULT:
+        gt_mod_vars = util.set_genotypes(normed_caller_vars, inputgt, conf)
+        gt_mod_result = comparator(inputvar, gt_mod_vars, bedregion, conf)
+        if result_from_tuple(gt_mod_result) == MATCH_RESULT:
+            if inputgt in "0/1":
+                result_str = ZYGOSITY_EXTRA_ALLELE
+                remove_tmpdir = False
+                tmpdir_suffix = "-extra-allele"
+            else:
+                result_str = ZYGOSITY_MISSING_ALLELE
+                remove_tmpdir = False
+                tmpdir_suffix = "-missing-allele"
+
+    return result_str, remove_tmpdir, tmpdir_suffix
+
+
+def process_batch(variant_batch, conf, homs, keep_tmpdir=False):
     """
     Process the given variant by creating a fake 'genome' with the variant, simulating reads from it,
      aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
      comparison methods to generate results. The results are just written to a big text file, which needs to
      be parsed by a separate utility to generate anything readable.
-    :param variant: pysam.Variant object to simulate
+    :param variant_batch: pysam.Variant object to simulate
     :param conf: Configuration containing paths to all required binaries / executables / genomes, etc.
     :param homs: Boolean indicating whether variants should be simulated as hets or homs
     :return:
@@ -113,16 +135,27 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
         pass
     os.chdir(tmpdir)
 
-    vcf_gt = "0/1"
+    #Allow single variants to be passed in as well for easier debugging
+    if type(variant_batch)!=list:
+        variant_batch = [variant_batch]
+
+
+    #The GT field to use in the true input VCF
+    true_gt = "0/1"
     if homs:
-        vcf_gt = "1/1"
+        true_gt = "1/1"
+
+    ttime = time.time()
+    print "Begin : " + str(time.time() - ttime)
     try:
-        orig_vcf = bam_simulation.write_vcf(variant, "test_input.vcf", conf, vcf_gt)
+        orig_vcf = util.write_vcf(variant_batch, "test_input.vcf", conf, true_gt)
         ref_path = conf.get('main', 'ref_genome')
 
-        bed = callers.vars_to_bed([variant])
-        reads = bam_simulation.gen_alt_fq(ref_path, [variant], homs, depth=250)
+        bed = util.vars_to_bed(variant_batch)
+        reads = bam_simulation.gen_alt_fq(ref_path, variant_batch, homs, depth=250)
         bam = bam_simulation.gen_alt_bam(ref_path, conf, reads)
+
+        print "Done with bam gen : " + str(time.time() - ttime)
 
         var_results = {}
         variant_callers = callers.get_callers()
@@ -131,46 +164,58 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
         for caller in variant_callers:
             vars = variant_callers[caller](bam, ref_path, bed, conf)
             variants[caller] = vars
-            var_results[caller] = {}
+
+
+        print "Done with calling : " + str(time.time() - ttime)
+
 
 
         remove_tmpdir = not keep_tmpdir
         tmpdir_suffix = ""
         for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
-            normed_orig_vars = normalizer(orig_vcf, conf)
+            normed_orig_vcf = normalizer(orig_vcf, conf)
+            orig_vars = list(pysam.VariantFile(orig_vcf))
+
+            print "Normalizing " + normalizer_name + " : " + str(time.time() - ttime)
 
             for caller in variants:
-                var_results[caller][normalizer_name] = {}
                 normed_caller_vars = normalizer(variants[caller], conf)
 
-                for comparator_name, comparator in comparators.get_comparators().iteritems():
-                    result = comparator(normed_orig_vars, normed_caller_vars, bed, conf)
-                    result_str = result_from_tuple(result)
-                    if result_str == NO_MATCH_RESULT:
-                        gt_mod_vars = util.set_genotypes(normed_caller_vars, vcf_gt, conf)
-                        gt_mod_result = comparator(normed_orig_vars, gt_mod_vars, bed, conf)
-                        if result_from_tuple(gt_mod_result) == MATCH_RESULT:
-                            if vcf_gt in "0/1":
-                                result_str = ZYGOSITY_EXTRA_ALLELE
-                                remove_tmpdir = False
-                                tmpdir_suffix = caller + "-" + normalizer_name + "-extra-allele"
-                            else:
-                                result_str = ZYGOSITY_MISSING_ALLELE
-                                remove_tmpdir = False
-                                tmpdir_suffix = caller + "-" + normalizer_name + "-missing-allele"
-                    var_results[caller][normalizer_name][comparator_name] = result_str
+                for region in util.read_regions(bed):
+                    match_var = util.find_matching_var(orig_vars, region)
+                    if len(match_var) != 1:
+                        raise ValueError('Uh oh, didnt find exactly one matching variant for this bed region...')
+                    match_var = match_var[0]
+                    single_bed = "single.region." + util.randstr() + ".bed"
+                    with open(single_bed, "w") as fh:
+                        fh.write("\t".join([region.chr, str(region.start), str(region.end)]) + "\n")
 
-                    print "Result for " + " ".join( str(variant).split()[0:5]) + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result_str
 
-        keep, suffix, comment = should_keep_dir(var_results, variant)
-        if keep:
-            remove_tmpdir = False
-            tmpdir_suffix = suffix
-            with open("flag.info.txt", "a") as fh:
-                fh.write(str(comment) + "\n")
+                    for comparator_name, comparator in comparators.get_comparators().iteritems():
+                        result, remove_tmpdir, tmpdir_suffix = compare_single_var(comparator, normed_orig_vcf, normed_caller_vars, single_bed, true_gt, conf)
+                        if match_var not in var_results:
+                            var_results[match_var] = {}
+                        if caller not in var_results[match_var]:
+                            var_results[match_var][caller] = {}
+                        if normalizer_name not in var_results[match_var][caller]:
+                            var_results[match_var][caller][normalizer_name] = {}
+
+                        var_results[match_var][caller][normalizer_name][comparator_name] = result
+                        print "Result for " + " ".join(str(match_var).split()[0:5]) + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result
+                    print "All comps for " + caller + " / " + normalizer_name + " : " + str(time.time() - ttime)
+
+        for origvar in var_results.keys():
+            keep, suffix, comment = should_keep_dir(var_results[origvar])
+            if keep:
+                remove_tmpdir = False
+                tmpdir_suffix = suffix
+                with open("flag.info.txt", "a") as fh:
+                    fh.write(str(comment) + "\n")
+                with open("var.info.txt", "w") as fh:
+                    fh.write("Causative variant: " + str(origvar) + "\n")
 
     except Exception as ex:
-        print "Error processing variant " + str(variant) + " : " + str(ex)
+        print "Error processing variant " + str(variant_batch) + " : " + str(ex)
         tb.print_exc(file=sys.stdout)
         remove_tmpdir = False
         tmpdir_suffix = "error"
@@ -185,7 +230,7 @@ def process_variant(variant, conf, homs, keep_tmpdir=False):
     if remove_tmpdir:
         os.system("rm -rf " + tmpdir)
     else:
-        dirname = "tmpdir-chr" + variant.chrom + "-" + str(variant.start) + "-" + tmpdir_suffix
+        dirname = "tmpdir" + tmpdir_suffix
         os.system("mv " + tmpdir + " " + dirname)
 
 def process_vcf(input_vcf, homs, conf, keep_tmpdir=False):
@@ -196,8 +241,9 @@ def process_vcf(input_vcf, homs, conf, keep_tmpdir=False):
     :return:
     """
     input_vcf = pysam.VariantFile(input_vcf)
-    for input_var in input_vcf:
-        process_variant(input_var, conf, homs, keep_tmpdir)
+    process_batch(list(input_vcf), conf, homs, keep_tmpdir)
+    # for input_var in input_vcf:
+    #     process_variant(input_var, conf, homs, keep_tmpdir)
 
 
 if __name__=="__main__":

@@ -116,27 +116,3 @@ def verify_reads(fq1, fq2, bam, conf):
     if (r1 + r2) > bc:
         raise ValueError("BAM does not have same number of reads as input fastqs")
 
-def write_vcf(variant, filename, conf, gt="1/1"):
-    fh = open(filename, "w")
-    fh.write("##fileformat=VCFv4.1\n")
-    fh.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
-    fh.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
-    fh.write(variant.chrom + "\t")
-    fh.write(str(variant.start+1) + "\t") #Remember - internally 0-based coords, but in vcf 1-based
-    fh.write("." + "\t")
-    fh.write(variant.ref + "\t")
-    fh.write(variant.alts[0] + "\t")
-    fh.write("100" + "\t")
-    fh.write("PASS" + "\t")
-    fh.write("." + "\t")
-    fh.write("GT" + "\t")
-    fh.write(gt + "\n")
-    fh.close()
-    return callers.compress_vcf(filename, conf)
-
-
-# if __name__=="__main__":
-#     conf = cp.SafeConfigParser()
-#     conf.read("./comp.conf")
-#     vars = list(pysam.VariantFile("test_small.vcf"))
-#     gen_alt_bam(conf.get('main', 'ref_genome'), vars, conf)
