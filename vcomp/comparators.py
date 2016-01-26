@@ -101,7 +101,7 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
         return (read_all_vars(orig_vcf, bed), [], caller_vars)
 
     output_dir = "vcfeval-output" + str(time.time())[-6:].replace(".", "")
-    cmd = "java -Xmx2g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " --all-records -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
+    cmd = "java -Djava.io.tmpdir=. -Xmx2g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " --all-records -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
     if bed is not None:
         cmd = cmd + " --bed-regions " + bed
     subprocess.check_output(cmd, shell=True, executable="/bin/bash")
@@ -109,19 +109,24 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
     tp_vars = read_all_vars(output_dir + "/tp.vcf.gz")
     fp_vars = read_all_vars(output_dir + "/fp.vcf.gz")
     fn_vars = read_all_vars(output_dir + "/fn.vcf.gz")
-    return (fn_vars, zip(orig_vars, tp_vars), fp_vars)
+    return (fn_vars, zip(tp_vars, tp_vars), fp_vars)
 
 
 def compare_happy(orig_vcf, caller_vcf, bed, conf):
+    orig_vars = read_all_vars(orig_vcf, bed)
     caller_vars = read_all_vars(caller_vcf, bed)
     if len(caller_vars)==0:
         return (read_all_vars(orig_vcf, bed), [], caller_vars)
     output_prefix = "happyoutput-" + util.randstr(6)
 
+    all_chrs = set([v.chrom for v in orig_vars])
+    all_chrs.update([v.chrom for v in caller_vars])
+    all_chrs = list(all_chrs)
+
     bedarg = ""
     if bed is not None:
         bedarg = " -T " + bed
-    cmd = conf.get('main', 'happy_path') + " " + orig_vcf + " " + caller_vcf + " " + bedarg + " -o " + output_prefix + " --include-nonpass -r " + conf.get('main', 'ref_genome') + " -l " + caller_vars[0].chrom + " --no-fixchr-truth --no-fixchr-query -V"
+    cmd = conf.get('main', 'happy_path') + " " + orig_vcf + " " + caller_vcf + " " + bedarg + " -o " + output_prefix + " --scratch-prefix=. --include-nonpass -r " + conf.get('main', 'ref_genome') + " -l " + ",".join(all_chrs) + " --no-fixchr-truth --no-fixchr-query -V"
     ignored = subprocess.check_output(cmd, shell=True)
 
     orig_unmatched = []
@@ -132,6 +137,8 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
         vstr = str(var)
         if "type=FP" in vstr:
             caller_unmatched.append(var)
+            if "kind=gtmismatch" in vstr:
+                orig_unmatched.append(var)
         elif "type=TP" in vstr:
             matches.append( (var, var) )
         elif "type=FN" in vstr:
@@ -145,7 +152,7 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
 def get_comparators():
     return {
         "raw": compare_raw,
-        "vgraph": compare_vgraph,
+        #"vgraph": compare_vgraph,
         "vcfeval": compare_vcfeval,
         "happy": compare_happy
     }

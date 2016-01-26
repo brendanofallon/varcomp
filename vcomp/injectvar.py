@@ -8,7 +8,7 @@ import traceback as tb
 import util
 import pysam
 import time
-
+from collections import namedtuple
 import bam_simulation, callers, comparators, normalizers
 
 
@@ -70,11 +70,12 @@ def should_keep_dir(var_res):
     for caller in var_res:
         for norm in var_res[caller]:
 
-            vgraph_result = var_res[caller][norm]["vgraph"]
+            #vgraph_result = var_res[caller][norm]["vgraph"]
             vcfeval_result = var_res[caller][norm]["vcfeval"]
             happy_result = var_res[caller][norm]["happy"]
 
-            if vgraph_result != vcfeval_result or vcfeval_result != happy_result:
+            if vcfeval_result != happy_result:
+            # if vgraph_result != vcfeval_result or vcfeval_result != happy_result:
                 keep = True
                 suffix = "comp-mismatch"
                 comment = "\n".join(["caller: " + caller, "norm:" + norm, "vgraph:" + vgraph_result, "vcfeval:" + vcfeval_result, "happy:"+ happy_result])
@@ -95,14 +96,26 @@ def should_keep_dir(var_res):
 
     return (keep, suffix, comment)
 
-def compare_single_var(comparator, inputvar, normed_caller_vars, bedregion, inputgt, conf):
-    result = comparator(inputvar, normed_caller_vars, bedregion, conf)
+def compare_single_var(result, bedregion, orig_vars, caller_vars, comparator, inputgt, conf):
+    """
+    Determine a result string for the given result tuple. Not trivial since for NO_MATCH_RESULTS we need to
+     determine if a simple genotype change will produce a match
+    :param result: Result tuple produced by a comparator
+    :param bedregion: Genomic region containing result
+    :param orig_vars: 'original' (truth) variant set
+    :param caller_vars: Variants produced by caller
+    :param comparator: Comparator function
+    :param inputgt: True variant genotype
+    :param conf: Configuration
+    :return:
+    """
     result_str = result_from_tuple(result)
     remove_tmpdir = True
     tmpdir_suffix = ""
     if result_str == NO_MATCH_RESULT:
-        gt_mod_vars = util.set_genotypes(normed_caller_vars, inputgt, conf)
-        gt_mod_result = comparator(inputvar, gt_mod_vars, bedregion, conf)
+        gt_mod_vars = util.set_genotypes(caller_vars, inputgt, bedregion, conf)
+        bedfile = util.region_to_bedfile(bedregion)
+        gt_mod_result = comparator(orig_vars, gt_mod_vars, bedfile, conf)
         if result_from_tuple(gt_mod_result) == MATCH_RESULT:
             if inputgt in "0/1":
                 result_str = ZYGOSITY_EXTRA_ALLELE
@@ -115,6 +128,27 @@ def compare_single_var(comparator, inputvar, normed_caller_vars, bedregion, inpu
 
     return result_str, remove_tmpdir, tmpdir_suffix
 
+def split_results(allresults, bed):
+    """
+    all_results is the result of a call to a comparator, so it's a
+    tuple of (unmatched_orig (FN), matches, unmatched_caller (FP)). This function
+    breaks the variants all_results into the same structure, but with separate
+    entries for each region in the bed file.
+    :param allresults: Tuple containing results from a single comparator call
+    :param bed: BED file to split regions by
+    :return: List of tuples containing same data as allresults, but organized by bed region
+    """
+    reg_results = []
+    for region in util.read_regions(bed):
+        fns = [v for v in allresults[0] if v.chrom==region.chr and v.start >= region.start and v.start < region.end]
+        matches = [v for v in allresults[1] if v[0].chrom==region.chr and v[0].start >= region.start and v[0].start < region.end]
+        fps = [v for v in allresults[2] if v.chrom==region.chr and v.start >= region.start and v.start < region.end]
+        reg_results.append( (fns, matches, fps) )
+        #Sanity check...
+        if len(fns)+len(matches)==0:
+            raise ValueError('Uh oh, did not find any matching original vars for region!')
+
+    return reg_results
 
 def process_batch(variant_batch, conf, homs, keep_tmpdir=False):
     """
@@ -146,7 +180,7 @@ def process_batch(variant_batch, conf, homs, keep_tmpdir=False):
         true_gt = "1/1"
 
     ttime = time.time()
-    print "Begin : " + str(time.time() - ttime)
+    # print "Begin : " + str(time.time() - ttime)
     try:
         orig_vcf = util.write_vcf(variant_batch, "test_input.vcf", conf, true_gt)
         ref_path = conf.get('main', 'ref_genome')
@@ -155,7 +189,7 @@ def process_batch(variant_batch, conf, homs, keep_tmpdir=False):
         reads = bam_simulation.gen_alt_fq(ref_path, variant_batch, homs, depth=250)
         bam = bam_simulation.gen_alt_bam(ref_path, conf, reads)
 
-        print "Done with bam gen : " + str(time.time() - ttime)
+        # print "Done with bam gen : " + str(time.time() - ttime)
 
         var_results = {}
         variant_callers = callers.get_callers()
@@ -166,7 +200,7 @@ def process_batch(variant_batch, conf, homs, keep_tmpdir=False):
             variants[caller] = vars
 
 
-        print "Done with calling : " + str(time.time() - ttime)
+        # print "Done with calling : " + str(time.time() - ttime)
 
 
 
@@ -174,25 +208,22 @@ def process_batch(variant_batch, conf, homs, keep_tmpdir=False):
         tmpdir_suffix = ""
         for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
             normed_orig_vcf = normalizer(orig_vcf, conf)
-            orig_vars = list(pysam.VariantFile(orig_vcf))
 
-            print "Normalizing " + normalizer_name + " : " + str(time.time() - ttime)
+            # print "Normalizing " + normalizer_name + " : " + str(time.time() - ttime)
 
             for caller in variants:
-                normed_caller_vars = normalizer(variants[caller], conf)
+                normed_caller_vcf = normalizer(variants[caller], conf)
 
-                for region in util.read_regions(bed):
-                    match_var = util.find_matching_var(orig_vars, region)
-                    if len(match_var) != 1:
-                        raise ValueError('Uh oh, didnt find exactly one matching variant for this bed region...')
-                    match_var = match_var[0]
-                    single_bed = "single.region." + util.randstr() + ".bed"
-                    with open(single_bed, "w") as fh:
-                        fh.write("\t".join([region.chr, str(region.start), str(region.end)]) + "\n")
+                for comparator_name, comparator in comparators.get_comparators().iteritems():
+                    all_results = comparator(normed_orig_vcf, normed_caller_vcf, None, conf)
 
-
-                    for comparator_name, comparator in comparators.get_comparators().iteritems():
-                        result, remove_tmpdir, tmpdir_suffix = compare_single_var(comparator, normed_orig_vcf, normed_caller_vars, single_bed, true_gt, conf)
+                    single_results = split_results(all_results, bed)
+                    for region, result in zip(util.read_regions(bed), single_results):
+                        result, remove_tmpdir, tmpdir_suffix = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, true_gt, conf)
+                        match_vars = util.find_matching_var( pysam.VariantFile(orig_vcf), region)
+                        if len(match_vars)!=1:
+                            raise ValueError('Unable to find original variant from region!')
+                        match_var = " ".join(str(match_vars[0]).split()[0:5])
                         if match_var not in var_results:
                             var_results[match_var] = {}
                         if caller not in var_results[match_var]:
@@ -202,7 +233,7 @@ def process_batch(variant_batch, conf, homs, keep_tmpdir=False):
 
                         var_results[match_var][caller][normalizer_name][comparator_name] = result
                         print "Result for " + " ".join(str(match_var).split()[0:5]) + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result
-                    print "All comps for " + caller + " / " + normalizer_name + " : " + str(time.time() - ttime)
+                    # print "All comps for " + caller + " / " + normalizer_name + " : " + str(time.time() - ttime)
 
         for origvar in var_results.keys():
             keep, suffix, comment = should_keep_dir(var_results[origvar])

@@ -17,6 +17,8 @@ def normalize_nothing(orig_vcf, conf):
 
 def normalize_vap_leftalign(orig_vcf, conf):
     err = open("/dev/null")
+
+    orig_vcf = util.sort_vcf(orig_vcf, conf)
     tmp_vcf = orig_vcf.replace(".vcf", ".vap.tmp.vcf").replace(".gz", "")
     final_vcf = orig_vcf.replace(".vcf", ".vap.leftaligned.vcf")
     norm_orig_cmd = conf.get('main', 'vcfallelicprimitives_path') + " " + orig_vcf

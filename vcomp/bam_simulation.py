@@ -70,7 +70,7 @@ def generate_reads(alt_genome_path, chr, pos, read_count=250, prefix="test-reads
 
 def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     dest = reads1.replace("_1.fq", "") + ".bam"
-    cmd = bwapath + " mem " + " -R \'" + "\t".join(['@RG', 'ID:test', 'SM:sample', 'PL:Illumina']) + "\' " + ref_genome + " " + reads1 + " " + reads2 + " | " + samtoolspath + " sort -T sorttmp -O bam - > " + dest + "\n" + samtoolspath + " index " + dest + "\n"
+    cmd = bwapath + " mem " + " -I 250.0,50,500 -R \'" + "\t".join(['@RG', 'ID:test', 'SM:sample', 'PL:Illumina']) + "\' " + ref_genome + " " + reads1 + " " + reads2 + " | " + samtoolspath + " sort -T sorttmp -O bam - > " + dest + "\n" + samtoolspath + " index " + dest + "\n"
     script_path = "./align.sh"
     with open(script_path, "w") as script_fh:
         script_fh.write(cmd)

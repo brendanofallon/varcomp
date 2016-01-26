@@ -14,6 +14,33 @@ hom_ref_gts = ["0/0", "0|0"]
 het_gts = ["0/1", "1/0", "1|0", "0|1"]
 hom_alt_gts = ["1/1", "1|1"]
 
+DEFAULT_CONTIG_ORDER=['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3', '4', '5', '6', '7', '8','9', 'MT', 'X','Y']
+
+def contig_sort_key(var):
+    return DEFAULT_CONTIG_ORDER.index(var[0])
+
+def sort_vcf(vcf, conf):
+
+    tmpfile = vcf.replace(".vcf", ".sort.vcf").replace(".gz", "")
+    vars = []
+    ofh = open(tmpfile, "w")
+    if vcf.endswith(".gz"):
+        fh = gzip.open(vcf)
+    else:
+        fh = open(vcf)
+
+    for line in fh.readlines():
+         if len(line)>0 and line[0]=='#':
+             ofh.write(line)
+         else:
+             vars.append(line.split('\t'))
+    for var in sorted(vars, key=contig_sort_key):
+        ofh.write('\t'.join(var))
+
+    ofh.close()
+    fh.close()
+    return bgz_tabix(tmpfile, conf)
+
 def randstr(length=8):
     return "".join([random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(length)])
 
@@ -22,21 +49,19 @@ def bgz_tabix(path, conf):
     If the path does not end in .gz bgzip the file, then index with tabix and return the potentially modified filename
     :return: Filename of compressed file
     """
-    try:
-        if not path.endswith(".gz"):
-            cmd = conf.get('main', 'bgzip_path') + " " + path
-            subprocess.check_call(cmd.split())
-            path = path + ".gz"
 
-        cmd = conf.get('main', 'tabix_path') + " -f " + path
+    if not path.endswith(".gz"):
+        cmd = conf.get('main', 'bgzip_path') + " " + path
         subprocess.check_call(cmd.split())
-    except Exception as ex:
-        raise ex
+        path = path + ".gz"
+    cmd = conf.get('main', 'tabix_path') + " -f " + path
+    subprocess.check_call(cmd.split())
+
     return path
 
 
 
-def set_genotypes(orig_vcf, newGT, conf):
+def set_genotypes(orig_vcf, newGT, region, conf):
     """
     Create a new VCF file that is identical to the given VCF, except that all GT info fields are set to 'newGT'
     """
@@ -53,6 +78,13 @@ def set_genotypes(orig_vcf, newGT, conf):
             ofh.write(line)
         else:
             toks = line.split('\t')
+            chr = toks[0]
+            start = int(toks[1])
+
+            if region is not None and (chr != region.chr or start<region.start or start>=region.end):
+                ofh.write(line)
+                continue
+
             if len(toks)<10:
                 ofh.write(line)
             else:
@@ -68,6 +100,16 @@ def set_genotypes(orig_vcf, newGT, conf):
     bgz_vcf = bgz_tabix(newvcf, conf)
     return bgz_vcf
 
+def region_to_bedfile(region):
+    """
+    Write the given region to its own one-line bed file, return the filename
+    :param region:
+    :return:
+    """
+    filename = "tmpbed-" + randstr() + ".bed"
+    with open(filename, "w") as fh:
+        fh.write("\t".join([region.chr, str(region.start), str(region.end)]) + "\n")
+    return filename
 
 def vars_to_bed(variants, window=500):
     """
