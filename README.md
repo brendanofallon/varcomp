@@ -1,5 +1,5 @@
 # varcomp
-Tools for calling and comparing variants from simulated read sets
+Tools for calling and comparing variants from simulated read sets. The primary function is to take a list of variants (in VCF format), simulate fastq reads from them, align those reads to a reference, and then run multiple variant callers, normalization tools, and comparison tools to see which callers produced results that matched the input. 
 
 This tool consists of two main modules. The first, `vcomp/injectvar.py` processes an input VCF of variants and writes results to standard output (you'll probably want to redirect it to a file). The second, `vcomp/parse_injectvar_output.py` parses the results file and emits aggregated results. Typical usage looks something like:
 
@@ -13,7 +13,7 @@ Each line in `my_output.txt` is the result for a single caller / normalizer / co
      
  Various aggregate statistics will be written to standard output. Exactly what is computed is in flux and is likely to remain so for some time. 
  
- varcomp makes extensive use of multiple external applications (callers, normalizers, aligners, comparison tools, etc). The paths to these applications must be defined in a configuration file called `comp.conf`. By default, `injectvar.py` looks for a file called `comp.conf` in the active directory, but you can specify a path to it by using the `-c /path/to/configuration/file` argument. The format of the file is pretty straightforward, just a list of key=value pairs where the values are the paths to various executables. 
+ varcomp makes extensive use of multiple external applications (callers, normalizers, aligners, comparison tools, etc). The paths to these applications must be defined in a standard python configuration file. By default, `injectvar.py` looks for a file called `comp.conf` in the active directory, but you can specify a path to it by using the `-c /path/to/configuration/file` argument. The format of the file is pretty straightforward, just a list of key=value pairs where the values are the paths to various executables. 
  
 # Under the hood
  
