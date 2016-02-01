@@ -100,8 +100,8 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
     if len(caller_vars)==0:
         return (read_all_vars(orig_vcf, bed), [], caller_vars)
 
-    output_dir = "vcfeval-output" + str(time.time())[-6:].replace(".", "")
-    cmd = "java -Djava.io.tmpdir=. -Xmx2g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " --all-records -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
+    output_dir = "vcfeval-output" + util.randstr()
+    cmd = "java -Djava.io.tmpdir=. -Xmx4g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " --all-records -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
     if bed is not None:
         cmd = cmd + " --bed-regions " + bed
     subprocess.check_output(cmd, shell=True, executable="/bin/bash")
@@ -152,7 +152,7 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
 def get_comparators():
     return {
         "raw": compare_raw,
-        #"vgraph": compare_vgraph,
+        # "vgraph": compare_vgraph,
         "vcfeval": compare_vcfeval,
         "happy": compare_happy
     }

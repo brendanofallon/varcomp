@@ -27,6 +27,12 @@ def call_variant_platypus(bam, orig_genome_path, bed, conf=None):
     #err.close()
     return util.compress_vcf(vcfoutput, conf)
 
+def call_variant_platypus_asm(bam, orig_genome_path, bed, conf=None):
+    vcfoutput = "output-platypus.vcf"
+    cmd= "python " + conf.get('main', 'platypus_path') + " callVariants --assemble=1 --assembleBadReads=1 --refFile " + orig_genome_path + " --bamFiles " + bam + " --regions " + bed + " -o " + vcfoutput
+    subprocess.check_call(cmd, shell=True)
+    return util.compress_vcf(vcfoutput, conf)
+
 def call_wecall(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-wc.vcf"
     cmd=conf.get('main', 'wecall_path') + " --refFile " + orig_genome_path + " --inputs " + bam + " --regions " + bed + " --output " + vcfoutput
@@ -36,7 +42,12 @@ def call_wecall(bam, orig_genome_path, bed, conf=None):
 def call_variant_gatk_hc(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-hc.vcf"
     err = open("/dev/null")
-    cmd="java -Xmx1g -Djava.io.tmpdir=. -jar " + conf.get('main', 'gatk_path') + " -T HaplotypeCaller -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
+    no_et = ""
+    try:
+        no_et = " -et NO_ET -K " + conf.get('main', 'gatk_no_et')
+    except:
+        pass
+    cmd="java -Xmx1g -Djava.io.tmpdir=. -jar " + conf.get('main', 'gatk_path') + " -T HaplotypeCaller " + no_et + " -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
     #print "Executing " + cmd
     subprocess.check_output(cmd, shell=True, stderr=err)
     err.close()
@@ -46,7 +57,12 @@ def call_variant_gatk_hc(bam, orig_genome_path, bed, conf=None):
 def call_variant_gatk_ug(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-ug.vcf"
     err = open("/dev/null")
-    cmd="java -Xmx1g -Djava.io.tmpdir=. -jar " + conf.get('main', 'gatk_path') + " -T UnifiedGenotyper -glm BOTH -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
+    no_et = ""
+    try:
+        no_et = " -et NO_ET -K " + conf.get('main', 'gatk_no_et')
+    except:
+        pass
+    cmd="java -Xmx1g -Djava.io.tmpdir=. -jar " + conf.get('main', 'gatk_path') + " -T UnifiedGenotyper -glm BOTH " + no_et + " -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
     #print "Executing " + cmd
     subprocess.check_output(cmd, shell=True, stderr=err)
     err.close()
@@ -66,8 +82,9 @@ def get_callers():
     return {
         "freebayes": call_variant_fb,
         "platypus": call_variant_platypus,
-        #"rtg": call_variant_rtg,
-        #"gatk-hc": call_variant_gatk_hc,
+        #platypus-asm": call_variant_platypus_asm,
+        "rtg": call_variant_rtg,
+        "gatk-hc": call_variant_gatk_hc,
         #"wecall": call_wecall,
         "gatk-ug": call_variant_gatk_ug
         #"wecall": call_wecall

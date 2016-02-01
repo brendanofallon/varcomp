@@ -25,15 +25,15 @@ def find_vgraph_vcfeval_mismatches(var_results, var):
     mismatches = []
     for caller in var_results:
         for norm_method in var_results[caller]:
-            if "vgraph:" in var_results[caller][norm_method] and "vcfeval:" in var_results[caller][norm_method] and var_results[caller][norm_method]["vcfeval:"] != injectvar.NO_VARS_FOUND_RESULT:
-                if var_results[caller][norm_method]["vgraph:"] != var_results[caller][norm_method]["vcfeval:"]:
-                    mismatches.append( (caller, norm_method, var, var_results[caller][norm_method]["vgraph:"], var_results[caller][norm_method]["vcfeval:"]) )
+            if "happy:" in var_results[caller][norm_method] and "vcfeval:" in var_results[caller][norm_method] and var_results[caller][norm_method]["vcfeval:"] != injectvar.NO_VARS_FOUND_RESULT:
+                if var_results[caller][norm_method]["happy:"] != var_results[caller][norm_method]["vcfeval:"]:
+                    mismatches.append( (caller, norm_method, var, var_results[caller][norm_method]["happy:"], var_results[caller][norm_method]["vcfeval:"]) )
     return mismatches
 
 
 def find_normalizer_breaks(var_results, var):
     breaks = []
-    comp_method = "vgraph:"
+    comp_method = "vcfeval:"
     for caller in var_results:
         try:
             res = None

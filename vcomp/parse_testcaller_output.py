@@ -5,19 +5,21 @@ results_by_size = {}
 results = {}
 for line in open(sys.argv[1], "r"):
     if line.startswith("Result for"):
-        toks=line.strip().split(' ', 8)
-        if len(toks)<9:
+        toks=line.strip().split(' ', 12)
+        if len(toks)<12:
             continue
         ref = toks[5]
-        alt = toks[6]
-        size = len(alt) - len(ref)
-        caller = toks[7].replace(":", "")
-        result = toks[8]
+        alt = toks[6].replace(":", "")
+        caller = toks[7]
+        norm_method = toks[9]
+        comp_method = toks[11]
+        result = toks[12]
         if not caller in results:
             results[caller] = [0, 0]
         counts = results[caller]
 
 
+        size = len(alt) - len(ref)
         if not size in results_by_size:
             results_by_size[size] = {}
         if not caller in results_by_size[size]:

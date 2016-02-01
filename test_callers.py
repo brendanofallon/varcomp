@@ -6,7 +6,7 @@ import string
 
 import pysam
 
-from vcomp import bam_simulation, callers, comparators
+from vcomp import injectvar, bam_simulation, callers, comparators
 
 
 def process_variant(variant_batch, results, conf, batchnum, homs):
@@ -60,7 +60,7 @@ def canadd(var, batch, max_batch_size, min_safe_dist=2000):
             return False
     return True
 
-def batch_variants(vars, max_batch_size=10):
+def batch_variants(vars, max_batch_size=50):
     batches = []
     vars = list(vars)
     while len(vars)>0:
@@ -95,16 +95,7 @@ def process_vcf(input_vcf, homs, conf):
     :param conf:
     :return:
     """
-    #Initialize results structure
-    all_results = {}
-    for caller_name in callers.get_callers():
-        all_results[caller_name] = {
-                comparators.NO_VARS_FOUND_RESULT: 0,
-                comparators.NO_MATCH_RESULT: 0,
-                comparators.MATCH_RESULT: 0,
-                comparators.PARTIAL_MATCH: 0,
-                comparators.INCORRECT_GENOTYPE_RESULT: 0
-            }
+
 
     batches = batch_variants(pysam.VariantFile(input_vcf))
     assert sum([len(b) for b in batches]) == len(list(pysam.VariantFile(input_vcf)))
@@ -112,15 +103,8 @@ def process_vcf(input_vcf, homs, conf):
     #    print "\n Batch of size " + str(len(batch))
     #    for v in sorted(batch, cmp=var_sort):
     #        print "  " + v.chrom + "\t" + str(v.start) + "\t" + str(v.ref) + "\t" + str(v.alts[0])
-    for batch in batches:
-        process_variant(sorted(batch, cmp=var_sort), all_results, conf, batches.index(batch), homs)
-
-
-    for caller in all_results:
-        print "Caller: " + caller
-        for result, count in all_results[caller].iteritems():
-            print "\t\t" + result + "\t:\t" + str(count)
-
+    for num, batch in enumerate(batches):
+        injectvar.process_batch(sorted(batch, cmp=var_sort),  str(num), conf, homs, disable_flagging=True)
 
 
 

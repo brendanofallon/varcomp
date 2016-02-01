@@ -1,7 +1,6 @@
 
 import subprocess
 import gzip
-import time
 import random
 import string
 from collections import namedtuple
@@ -10,18 +9,29 @@ HOM_REF_GT = "Hom ref."
 HET_GT = "Het"
 HOM_ALT_GT = "Hom alt."
 
-hom_ref_gts = ["0/0", "0|0"]
-het_gts = ["0/1", "1/0", "1|0", "0|1"]
-hom_alt_gts = ["1/1", "1|1"]
+ALL_HOMREF_GTS = ["0/0", "0|0"]
+ALL_HET_GTS = ["0/1", "1/0", "1|0", "0|1"]
+ALL_HOMALT_GTS = ["1/1", "1|1"]
 
 DEFAULT_CONTIG_ORDER=['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3', '4', '5', '6', '7', '8','9', 'MT', 'X','Y']
 
-def contig_sort_key(var):
-    return DEFAULT_CONTIG_ORDER.index(var[0])
+def var_comp(v1, v2):
+    """
+    Comparator for two variants - chromosome first (according to DEFAULT_CONTIG_ORDER), then position
+    :param v1:
+    :param v2:
+    :return:
+    """
+    v1c = DEFAULT_CONTIG_ORDER.index(v1[0])
+    v2c = DEFAULT_CONTIG_ORDER.index(v2[0])
+    if v1c == v2c:
+        return int(v1[1]) - int(v2[1])
+    else:
+        return v1c - v2c
 
 def sort_vcf(vcf, conf):
 
-    tmpfile = vcf.replace(".vcf", ".sort.vcf").replace(".gz", "")
+    tmpfile = vcf.replace(".vcf", ".sort" + randstr() + ".vcf").replace(".gz", "")
     vars = []
     ofh = open(tmpfile, "w")
     if vcf.endswith(".gz"):
@@ -34,7 +44,7 @@ def sort_vcf(vcf, conf):
              ofh.write(line)
          else:
              vars.append(line.split('\t'))
-    for var in sorted(vars, key=contig_sort_key):
+    for var in sorted(vars, cmp=var_comp):
         ofh.write('\t'.join(var))
 
     ofh.close()
@@ -71,7 +81,7 @@ def set_genotypes(orig_vcf, newGT, region, conf):
     else:
         fh = open(orig_vcf, "r")
 
-    newvcf = orig_vcf.replace(".vcf", ".gtmod" + str(time.time())[-6:].replace(".", "") + ".vcf").replace(".gz", "")
+    newvcf = orig_vcf.replace(".vcf", ".gtmod" + randstr() + ".vcf").replace(".gz", "")
     ofh =open(newvcf, "w")
     for line in fh.readlines():
         if len(line)==0 or line[0]=='#':
@@ -207,10 +217,10 @@ def get_first_gt(var):
         return None
 
     gt = toks[9].split(":")[0]
-    if gt in hom_ref_gts:
+    if gt in ALL_HOMREF_GTS:
         return HOM_REF_GT
-    if gt in hom_alt_gts:
+    if gt in ALL_HOMALT_GTS:
         return HOM_ALT_GT
-    if gt in het_gts:
+    if gt in ALL_HET_GTS:
         return HET_GT
     return gt

@@ -7,8 +7,16 @@ import pysam
 
 DEFAULT_CONTIG_ORDER=['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3', '4', '5', '6', '7', '8','9', 'MT', 'X','Y']
 
-def contig_sort_key(c):
-    return DEFAULT_CONTIG_ORDER.index(c[0])
+def var_comp(v1, v2):
+    v1c = DEFAULT_CONTIG_ORDER.index(v1[0])
+    v2c = DEFAULT_CONTIG_ORDER.index(v2[0])
+    if v1c == v2c:
+        return v1[1] - v2[1]
+    else:
+        return v1c - v2c
+
+
+
 
 def window(seq, n=2):
     '''windowed iterator
@@ -152,7 +160,7 @@ def main(args):
 
     for i,part in enumerate(parts, 1):
         out_vars = pysam.VariantFile(basename.format(i), 'w', header=vars.header)
-        for var in sorted(list(part), key=contig_sort_key):
+        for var in sorted(list(part), cmp=var_comp):
             out_vars.write(var[3])
         out_vars.close()
 

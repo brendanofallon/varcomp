@@ -9,10 +9,16 @@ region_margin = 20
 
 def to_region(region_str):
     toks = region_str.split()
-    return (toks[0], int(toks[1])+region_margin, int(toks[2])-region_margin)
+    start = int(toks[1])+region_margin
+    end = int(toks[2])-region_margin
+    if (end > start):
+        return (toks[0], start, end)
+    else:
+        return None
 
 def read_regions(path):
-    return [to_region(r) for r in open(path, "r") if r[0] != '#']
+    regions = [to_region(r) for r in open(path, "r") if r[0] != '#']
+    return [reg for reg in regions if reg is not None]
 
 def gen_insertion(ref, chr, location, size):
     insertion = "".join([random.choice(bases) for _ in range(size)])
@@ -40,15 +46,15 @@ def pick_location(regions):
     return (region[0], loc)
 
 def generate_all(ref, regions, output):
-    reps_per_size = 10
+    reps_per_size = 50
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
         loc = pick_location(regions)
-        for size in range(50, 150, 1000):
-            var = gen_deletion(ref, loc[0], loc[1], size)
-            #var = gen_insertion(ref, loc[0], loc[1], size)
+        for size in range(10, 151, 10):
+            #var = gen_deletion(ref, loc[0], loc[1], size)
+            var = gen_insertion(ref, loc[0], loc[1], size)
             #var = gen_duplication(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
             output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")
