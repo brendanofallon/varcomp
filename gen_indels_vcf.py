@@ -40,6 +40,13 @@ def gen_inverse_dup(ref, chr, location, size):
     alt = ref_bases + revcomp(ref_bases)
     return "\t".join([chr, str(location+1), ".", ref_bases, alt])
 
+def gen_snp(ref, chr, location, size):
+    ref_bases = ref.fetch(chr, location, location+1)
+    alt = random.choice(bases)
+    while alt == ref_bases:
+        alt = random.choice(bases)
+    return "\t".join([chr, str(location+1), ".", ref_bases, alt])
+
 def pick_location(regions):
     region = random.choice(regions)
     loc = random.randint(region[1], region[2])
@@ -52,10 +59,11 @@ def generate_all(ref, regions, output):
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
         loc = pick_location(regions)
-        for size in range(10, 151, 10):
+        for size in range(1, 12, 3):
             #var = gen_deletion(ref, loc[0], loc[1], size)
-            var = gen_insertion(ref, loc[0], loc[1], size)
-            #var = gen_duplication(ref, loc[0], loc[1], size)
+            # var = gen_insertion(ref, loc[0], loc[1], size)
+            # var = gen_snp(ref, loc[0], loc[1], size)
+            var = gen_duplication(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
             output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")
 

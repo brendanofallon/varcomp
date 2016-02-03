@@ -191,9 +191,9 @@ for caller in results:
 #     print "\n",
 
 
-print "\n\n vgraph / vcfeval mismatches:"
+print "\n\n happy / vcfeval mismatches:"
 for mismatch in vgraph_vcfeval_mismatches:
-    print mismatch[1] + "\t" + mismatch[0] + "\t" + mismatch[2] + " vgraph: " + mismatch[3] + "  vcfeval: " + mismatch[4]
+    print mismatch[1] + "\t" + mismatch[0] + "\t" + mismatch[2] + " happy: " + mismatch[3] + "  vcfeval: " + mismatch[4]
 
 print "\n\n Normalizer changing vgraph results:"
 for case in normalizer_issues:

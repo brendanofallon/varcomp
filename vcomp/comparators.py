@@ -78,18 +78,37 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
     if len(caller_vars)==0:
         return (read_all_vars(orig_vcf, bed), [], caller_vars)
 
+    orig_out = "vgout-orig." + util.randstr() + ".vcf"
+    caller_out = "vgout-caller." + util.randstr() + ".vcf"
     bedcmd = ""
     if bed is not None:
         bedcmd = " -i " + bed
-    vg_cmd = conf.get('main', 'vgraph_path') + " --reference " + conf.get('main', 'ref_genome') + bedcmd + " " + orig_vcf + " " + caller_vcf
-    cmd = [sys.executable]
-    cmd.extend(vg_cmd.split())
-    result = subprocess.check_output(cmd, env=os.environ.copy())
-    if "MISMATCH!" in result:
-        return (orig_vars, [], caller_vars)
-    elif "MATCH!" in result:
-        return ([], zip(orig_vars, orig_vars), [])
-    return (orig_vars, [], caller_vars)
+    vg_cmd = conf.get('main', 'vgraph_path') + " --out1 " + orig_out + " --out2 " + caller_out + " --reference " + conf.get('main', 'ref_genome') + bedcmd + " " + orig_vcf + " " + caller_vcf
+    # cmd = [sys.executable]
+    # cmd.extend(vg_cmd.split())
+    ignored = subprocess.check_output(vg_cmd, env=os.environ.copy(), shell=True)
+
+    unmatched_orig = []
+    matches = []
+    unmatched_caller = []
+
+    for ovar in pysam.VariantFile(orig_out):
+        bd = ovar.samples[0]['BD']
+        bk = ovar.samples[0]['BK']
+        if bd == '=':
+            matches.append( (ovar, ovar) )
+        if bd == 'X':
+            unmatched_orig.append( ovar )
+        if bd == 'N':
+            raise ValueError('vgraph error processing variant ' + str(ovar))
+    for cvar in pysam.VariantFile(caller_out):
+        bd = cvar.samples[0]['BD']
+        if bd == 'X':
+            unmatched_caller.append(cvar)
+        if bd == 'N':
+            raise ValueError('vgraph error processing variant ' + str(cvar))
+
+    return (unmatched_orig, matches, unmatched_caller)
 
 
 
@@ -152,7 +171,7 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
 def get_comparators():
     return {
         "raw": compare_raw,
-        # "vgraph": compare_vgraph,
+        "vgraph": compare_vgraph,
         "vcfeval": compare_vcfeval,
         "happy": compare_happy
     }
@@ -191,10 +210,9 @@ def read_all_vars(vcf, bed=None):
 def test_var_equiv(var1, var2):
     """
     Compare two vars for equality of chrom, pos, ref, and alt and return True if everything is equal.
-    This doesn't examine zygosity at all!
     :param var1:
     :param var2:
-    :return:
+    :return: True if both variant records are identical (contain same alts with same GT fields)
     """
     alts1 = str([str(a) + "," for a in var1.alts])
     alts2 = str([str(a) +","  for a in var2.alts])

@@ -7,10 +7,9 @@ import sys
 import traceback as tb
 import util
 import pysam
-import time
+import logging
 import random
 import bam_simulation, callers, comparators, normalizers
-import multiprocessing as mp
 
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
@@ -29,7 +28,7 @@ def result_from_tuple(tup):
     Comparators return a tuple consisting of unmatched_orig, matches, and unmatched_caller variants
     This examines the tuple and returns a short descriptive string of the result
     :param tup:
-    :return:
+    :return: Short, human readable string describing result
     """
     unmatched_orig = tup[0]
     matches = tup[1]
@@ -112,22 +111,25 @@ def compare_single_var(result, bedregion, orig_vars, caller_vars, comparator, in
     """
     result_str = result_from_tuple(result)
     if result_str == NO_MATCH_RESULT:
-        gt_mod_vars = util.set_genotypes(caller_vars, inputgt, bedregion, conf)
-        bedfile = util.region_to_bedfile(bedregion)
-        gt_mod_result = comparator(orig_vars, gt_mod_vars, bedfile, conf)
-        if result_from_tuple(gt_mod_result) == MATCH_RESULT:
-            if inputgt in util.ALL_HET_GTS:
-                result_str = ZYGOSITY_EXTRA_ALLELE
-            else:
-                result_str = ZYGOSITY_MISSING_ALLELE
+        try:
+            gt_mod_vars = util.set_genotypes(caller_vars, inputgt, bedregion, conf)
+            bedfile = util.region_to_bedfile(bedregion)
+            gt_mod_result = comparator(orig_vars, gt_mod_vars, bedfile, conf)
+            if result_from_tuple(gt_mod_result) == MATCH_RESULT:
+                if inputgt in util.ALL_HET_GTS:
+                    result_str = ZYGOSITY_EXTRA_ALLELE
+                else:
+                    result_str = ZYGOSITY_MISSING_ALLELE
+        except util.GTModException as ex:
+            logging.warning('Exception while attempting to modify GTs: ' + str(ex))
 
     return result_str
 
 def split_results(allresults, bed):
     """
-    all_results is the result of a call to a comparator, so it's a
+    allresults is the result of a call to a comparator, so it's a
     tuple of (unmatched_orig (FN), matches, unmatched_caller (FP)). This function
-    breaks the variants all_results into the same structure, but with separate
+    breaks the allresults into a list with separate
     entries for each region in the bed file.
     :param allresults: Tuple containing results from a single comparator call
     :param bed: BED file to split regions by
@@ -145,7 +147,7 @@ def split_results(allresults, bed):
 
     return reg_results
 
-def process_batch(variant_batch, batchname, conf, homs, keep_tmpdir=False, disable_flagging=False):
+def process_batch(variant_batch, batchname, conf, homs, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
     """
     Process the given batch of variants by creating a fake 'genome' with the variants, simulating reads from it,
      aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
@@ -164,49 +166,40 @@ def process_batch(variant_batch, batchname, conf, homs, keep_tmpdir=False, disab
         pass
     os.chdir(tmpdir)
 
-    #Allow single variants to be passed in as well for easier debugging
-    if type(variant_batch)!=list:
-        variant_batch = [variant_batch]
-
-
     #The GT field to use in the true input VCF
     true_gt = "0/1"
     if homs:
         true_gt = "1/1"
 
-    ttime = time.time()
-    sys.stderr.write("\nBeginning batch of " + str(len(variant_batch)) + " variants\n")
     try:
         orig_vcf = util.write_vcf(variant_batch, "test_input.vcf", conf, true_gt)
         ref_path = conf.get('main', 'ref_genome')
 
         bed = util.vars_to_bed(variant_batch)
-        reads = bam_simulation.gen_alt_fq(ref_path, variant_batch, homs, depth=250)
+        reads = bam_simulation.gen_alt_fq(ref_path, variant_batch, homs, depth=read_depth)
         bam = bam_simulation.gen_alt_bam(ref_path, conf, reads)
-
-        sys.stderr.write("Done with bam gen : " + str(time.time() - ttime) + "\n")
 
         var_results = {}
         variant_callers = callers.get_callers()
         variants = {}
 
         for caller in variant_callers:
+            logging.info("Running variant caller " + caller)
             vars = variant_callers[caller](bam, ref_path, bed, conf)
             variants[caller] = vars
 
         remove_tmpdir = not keep_tmpdir
         for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
+            logging.info("Running normalizer " + normalizer_name)
             normed_orig_vcf = normalizer(orig_vcf, conf)
-
-            sys.stderr.write("Normalizing " + normalizer_name + " : " + str(time.time() - ttime) + "\n")
 
             for caller in variants:
                 normed_caller_vcf = normalizer(variants[caller], conf)
 
                 for comparator_name, comparator in comparators.get_comparators().iteritems():
                     all_results = comparator(normed_orig_vcf, normed_caller_vcf, None, conf)
-
                     single_results = split_results(all_results, bed)
+                    logging.info("Running comparator " + comparator_name)
                     for region, result in zip(util.read_regions(bed), single_results):
                         result = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, true_gt, conf)
                         match_vars = util.find_matching_var( pysam.VariantFile(orig_vcf), region)
@@ -222,15 +215,13 @@ def process_batch(variant_batch, batchname, conf, homs, keep_tmpdir=False, disab
 
                         var_results[match_var][caller][normalizer_name][comparator_name] = result
 
-                    sys.stderr.write("All comps for " + caller + " / " + normalizer_name + " : " + str(time.time() - ttime) + "\n")
-
         #Iterate over all results and write to standard output. We do this here instead of within the loops above
         #because it keeps results organized by variant, which makes them easier to look at
         for var, vresults in var_results.iteritems():
             for caller, cresults in vresults.iteritems():
                 for normalizer_name, compresults in cresults.iteritems():
                     for comparator_name, result in compresults.iteritems():
-                        print "Result for " + var + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result
+                        output.write("Result for " + var + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result + "\n")
 
         if not disable_flagging:
             for origvar in var_results.keys():
@@ -241,7 +232,7 @@ def process_batch(variant_batch, batchname, conf, homs, keep_tmpdir=False, disab
                         fh.write("\n\n".join(comments) + "\n")
 
     except Exception as ex:
-        print "Error processing variant " + str(variant_batch) + " : " + str(ex)
+        logging.error("Error processing variant batch " + batchname + " : " + str(ex))
         tb.print_exc(file=sys.stderr)
         remove_tmpdir = False
         try:
@@ -264,37 +255,55 @@ def process_batch(variant_batch, batchname, conf, homs, keep_tmpdir=False, disab
         os.system("mv " + tmpdir + " " + dirname)
 
 
-def process_vcf(vcf, homs, conf, keep_tmpdir=False):
+def process_vcf(vcf, homs, conf, output, single_batch=False, keep_tmpdir=False):
     """
-    Iterate over entire vcf file, processing each variant individually and collecting results
+    Perform analyses for each variant in the VCF file.
     :param input_vcf:
+    :param single_batch: Assume all variants in VCF are part of one batch and process them all simultaneously
+    :param keep_tmpdir: Preserve tmpdirs created (otherwise delete them, unless they are flagged)
     :param conf:
-    :return:
     """
-    #TODO: Be smarter about this. RIght now we assume each input variant file is one big batch.
+
     input_vars = pysam.VariantFile(vcf)
-    process_batch(list(input_vars), vcf.replace(".vcf", "-tmpfiles"), conf, homs, keep_tmpdir)
-    # for input_var in input_vcf:
-    #     process_variant(input_var, conf, homs, keep_tmpdir)
+    logging.info("Processing variants in file " + vcf)
+    if single_batch:
+        logging.info("Processing all variants as one batch")
+        process_batch(list(input_vars), vcf.replace(".vcf", "-tmpfiles"), conf, homs, output=output, keep_tmpdir=keep_tmpdir)
+    else:
+        for batchnum, batch in enumerate(util.batch_variants(input_vars, max_batch_size=1000, min_safe_dist=2000)):
+            logging.info("Processing batch #" + str(batchnum) + " containing " + str(len(batch)) + " variants")
+            process_batch(batch, vcf.replace(".vcf", "-tmpfiles-") + str(batchnum), conf, homs, output=output, keep_tmpdir=keep_tmpdir)
+
 
 
 if __name__=="__main__":
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+
     parser = argparse.ArgumentParser("Inject, simulate, call, compare")
     parser.add_argument("-c", "--conf", help="Path to configuration file", default="./comp.conf")
     parser.add_argument("-v", "--vcf", help="Input vcf file(s)", nargs="+")
     parser.add_argument("-k", "--keep", help="Dont delete temporary directories", action='store_true')
+    parser.add_argument("-b", "--batch", help="Treat each input VCF file as a single batch (default False)", action='store_true')
     parser.add_argument("-s", "--seed", help="Random seed", default=None)
-    parser.add_argument("-t", "--threads", help="Number of threads to use", type=int, default=1)
+    parser.add_argument("-o", "--output", help="Output destination", default=sys.stdout)
     parser.add_argument("--het", help="Run all variants as hets (default false, run everything as homs)", action='store_true')
     args = parser.parse_args()
 
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
 
+    if type(args.output) is str:
+        args.output = open(args.output, "w")
+
     if args.seed is not None:
         random.seed(args.seed)
 
-    # threadpool = mp.Pool( min(mp.cpu_count(), args.threads))
-    # threadpool.map_async(process_vcf, ( (vcf, not args.het, conf, args.keep) for vcf in args.vcf))
     for vcf in args.vcf:
-        process_vcf(vcf, not args.het, conf, args.keep)
+        process_vcf(vcf, not args.het, conf, args.output, single_batch=args.batch, keep_tmpdir=args.keep)
+
+    try:
+        args.output.close()
+    except:
+        pass

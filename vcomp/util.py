@@ -8,6 +8,8 @@ from collections import namedtuple
 HOM_REF_GT = "Hom ref."
 HET_GT = "Het"
 HOM_ALT_GT = "Hom alt."
+HET_NONREF = "Het, non ref"
+HET_WITHREF = "Triploid / complex"
 
 ALL_HOMREF_GTS = ["0/0", "0|0"]
 ALL_HET_GTS = ["0/1", "1/0", "1|0", "0|1"]
@@ -99,7 +101,7 @@ def set_genotypes(orig_vcf, newGT, region, conf):
                 ofh.write(line)
             else:
                 if "," in toks[4]:
-                    raise ValueError('Cant set GT for multi-alt variants.')
+                    raise GTModException('Cant set GT for multi-alt variants.')
                 infoitems = [newGT]
                 if ':' in toks[9]:
                     infoitems.extend(toks[9].strip().split(':')[1:] )
@@ -109,6 +111,14 @@ def set_genotypes(orig_vcf, newGT, region, conf):
     ofh.close()
     bgz_vcf = bgz_tabix(newvcf, conf)
     return bgz_vcf
+
+class GTModException(Exception):
+
+    def __init__(self, msg=None):
+        self.msg = msg
+
+    def __str__(self):
+        return "GT modification exception: " + msg
 
 def region_to_bedfile(region):
     """
@@ -212,15 +222,72 @@ def get_first_gt(var):
     Returns string version of GT field.. Hack until we can get pysam to work..
     :param var:
     """
-    toks = str(var).split()
-    if len(toks) <= 9:
+    sample = var.samples[0]
+    if 'GT' not in sample:
         return None
+    gts = sample['GT']
+    refcount = len([g for g in gts if g==0])
+    altcount = len(gts)-refcount
+    alt_types = set([g for g in gts if g!=0])
 
-    gt = toks[9].split(":")[0]
-    if gt in ALL_HOMREF_GTS:
+    if len(alt_types)==0: #GT is like 0
         return HOM_REF_GT
-    if gt in ALL_HOMALT_GTS:
+
+    if len(alt_types)==1: #GT is like 0/1 or 1/1 or 0/2
+        if altcount==0:
+            return HOM_REF_GT
+        if refcount==1 and altcount==1:
+            return HET_GT
         return HOM_ALT_GT
-    if gt in ALL_HET_GTS:
-        return HET_GT
-    return gt
+
+    if len(alt_types)>1: #GT is like 1/2 or 0/1/2...
+        if refcount==0:
+            return HET_NONREF
+        else:
+            return HET_WITHREF
+
+
+def canadd(var, batch, max_batch_size, min_safe_dist=2000):
+    """
+    Helper for variant batching function
+    :param var: Single variant
+    :param batch: A batch to consider adding the variant to
+    :param max_batch_size: Maximum size of a batch
+    :param min_safe_dist: Minimum distance required between variants in the batch
+    :return:
+    """
+    if len(batch)>=max_batch_size:
+        return False
+    for b in batch:
+        if var.chrom == b.chrom and abs(b.start - var.start)<min_safe_dist:
+            return False
+    return True
+
+def batch_variants(vars, max_batch_size=50, min_safe_dist=2000):
+    """
+    Given a list of variants, group them into batches such that no batch contains two variants
+    whose start positions are within min_safe_dist bases of each other
+    :param vars: List of variants
+    :param max_batch_size: Maximum number of variants per batch
+    :param min_safe_dist: Min permissible distance between two variants in batch
+    :return: List of batches containing variants
+    """
+    batches = []
+    vars = list(vars)
+    while len(vars)>0:
+        var = vars.pop(0)
+        unfilled_batches = [b for b in batches if len(b)<max_batch_size]
+        found = False
+        for b in unfilled_batches:
+            if canadd(var, b, max_batch_size, min_safe_dist=min_safe_dist):
+                b.append(var)
+                found = True
+                break
+
+        if not found:
+            #Need to make a new batch for this variant, it doesn't fit anywhere
+            batch = []
+            batch.append(var)
+            batches.append(batch)
+
+    return batches

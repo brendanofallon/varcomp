@@ -6,7 +6,7 @@ import string
 
 import pysam
 
-from vcomp import injectvar, bam_simulation, callers, comparators
+import injectvar, bam_simulation, callers, comparators
 
 
 def process_variant(variant_batch, results, conf, batchnum, homs):
@@ -19,7 +19,7 @@ def process_variant(variant_batch, results, conf, batchnum, homs):
     :return:
     """
 
-    tmpdir = "tmp-working-" + str(batchnum) + "-" + "".join([random.choice(string.ascii_uppercase + string.ascii_lowercase) for _ in range(8)])
+    tmpdir = "tmp-varcomp-" + str(batchnum) + "-" + "".join([random.choice(string.ascii_uppercase + string.ascii_lowercase) for _ in range(8)])
     try:
         os.mkdir(tmpdir)
     except:
@@ -52,34 +52,6 @@ def process_variant(variant_batch, results, conf, batchnum, homs):
     os.chdir("..")
     os.system("rm -rf " + tmpdir)
 
-def canadd(var, batch, max_batch_size, min_safe_dist=2000):
-    if len(batch)>=max_batch_size:
-        return False
-    for b in batch:
-        if var.chrom == b.chrom and abs(b.start - var.start)<min_safe_dist:
-            return False
-    return True
-
-def batch_variants(vars, max_batch_size=50):
-    batches = []
-    vars = list(vars)
-    while len(vars)>0:
-        var = vars.pop(0)
-        unfilled_batches = [b for b in batches if len(b)<max_batch_size]
-        found = False
-        for b in unfilled_batches:
-            if canadd(var, b, max_batch_size):
-                b.append(var)
-                found = True
-                break
-
-        if not found:
-            batch = []
-            batch.append(var)
-            batches.append(batch)
-
-    return batches
-
 def var_sort(a, b):
     if a.chrom == b.chrom:
         return a.start - b.start
@@ -104,7 +76,7 @@ def process_vcf(input_vcf, homs, conf):
     #    for v in sorted(batch, cmp=var_sort):
     #        print "  " + v.chrom + "\t" + str(v.start) + "\t" + str(v.ref) + "\t" + str(v.alts[0])
     for num, batch in enumerate(batches):
-        injectvar.process_batch(sorted(batch, cmp=var_sort),  str(num), conf, homs, disable_flagging=True)
+        injectvar.process_batch(sorted(batch, cmp=var_sort),  str(num), conf, homs, disable_flagging=True, read_depth=40)
 
 
 
