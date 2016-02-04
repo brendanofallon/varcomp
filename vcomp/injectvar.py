@@ -68,19 +68,18 @@ def should_keep_dir(var_res, variant):
     for caller in var_res:
         for norm in var_res[caller]:
 
-            # vgraph_result = var_res[caller][norm]["vgraph"]
+            vgraph_result = var_res[caller][norm]["vgraph"]
             vcfeval_result = var_res[caller][norm]["vcfeval"]
             happy_result = var_res[caller][norm]["happy"]
 
-            # if vgraph_result != vcfeval_result or vcfeval_result != happy_result:
-            if vcfeval_result != happy_result:
+            if vgraph_result != vcfeval_result or vcfeval_result != happy_result:
                 keep = True
                 # comment = "\n".join(["caller: " + caller, "norm:" + norm, "vgraph:" + vgraph_result, "vcfeval:" + vcfeval_result, "happy:"+ happy_result])
-                comments.append("\n".join(["variant: " + str(variant), "caller: " + caller, "norm:" + norm, "vgraph: not used ", "vcfeval:" + vcfeval_result, "happy:"+ happy_result]))
+                comments.append("\n".join(["variant: " + str(variant), "caller: " + caller, "norm:" + norm, "vgraph: " + vgraph_result, "vcfeval:" + vcfeval_result, "happy:"+ happy_result]))
 
             if vcfeval_result == ZYGOSITY_EXTRA_ALLELE or vcfeval_result == ZYGOSITY_MISSING_ALLELE:
                 keep = True
-                comments.append("\n".join(["variant: " + str(variant), "caller: " + caller, "norm:" + norm, "vgraph: not used ", "vcfeval:" + vcfeval_result, "happy:"+ happy_result]))
+                comments.append("\n".join(["variant: " + str(variant), "caller: " + caller, "norm:" + norm, "vgraph: " + vgraph_result, "vcfeval:" + vcfeval_result, "happy:"+ happy_result]))
 
         nonorm_vcfeval_result = var_res[caller]["nonorm"]["vcfeval"]
         vap_vcfeval_result = var_res[caller]["vapleft"]["vcfeval"]
@@ -110,7 +109,7 @@ def compare_single_var(result, bedregion, orig_vars, caller_vars, comparator, in
     :return:
     """
     result_str = result_from_tuple(result)
-    if result_str == NO_MATCH_RESULT:
+    if result_str == NO_MATCH_RESULT  and len(inputgt.split("/"))==2:
         try:
             gt_mod_vars = util.set_genotypes(caller_vars, inputgt, bedregion, conf)
             bedfile = util.region_to_bedfile(bedregion)
@@ -147,7 +146,7 @@ def split_results(allresults, bed):
 
     return reg_results
 
-def process_batch(variant_batch, batchname, conf, homs, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
+def process_batch(variant_batch, batchname, conf, gt_policy, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
     """
     Process the given batch of variants by creating a fake 'genome' with the variants, simulating reads from it,
      aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
@@ -167,16 +166,17 @@ def process_batch(variant_batch, batchname, conf, homs, output=sys.stdout, keep_
     os.chdir(tmpdir)
 
     #The GT field to use in the true input VCF
-    true_gt = "0/1"
-    if homs:
+    true_gt = None
+    if gt_policy == bam_simulation.ALL_HETS:
+        true_gt = "0/1"
+    if gt_policy == bam_simulation.ALL_HOMS:
         true_gt = "1/1"
 
     try:
         orig_vcf = util.write_vcf(variant_batch, "test_input.vcf", conf, true_gt)
         ref_path = conf.get('main', 'ref_genome')
-
         bed = util.vars_to_bed(variant_batch)
-        reads = bam_simulation.gen_alt_fq(ref_path, variant_batch, homs, depth=read_depth)
+        reads = bam_simulation.gen_alt_fq(ref_path, variant_batch, read_depth, policy=gt_policy)
         bam = bam_simulation.gen_alt_bam(ref_path, conf, reads)
 
         var_results = {}
@@ -201,10 +201,12 @@ def process_batch(variant_batch, batchname, conf, homs, output=sys.stdout, keep_
                     single_results = split_results(all_results, bed)
                     logging.info("Running comparator " + comparator_name)
                     for region, result in zip(util.read_regions(bed), single_results):
-                        result = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, true_gt, conf)
                         match_vars = util.find_matching_var( pysam.VariantFile(orig_vcf), region)
                         if len(match_vars)!=1:
                             raise ValueError('Unable to find original variant from region!')
+
+                        result = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, "/".join([str(i) for i in match_vars[0].samples[0]['GT']]), conf)
+
                         match_var = " ".join(str(match_vars[0]).split()[0:5])
                         if match_var not in var_results:
                             var_results[match_var] = {}
@@ -255,7 +257,7 @@ def process_batch(variant_batch, batchname, conf, homs, output=sys.stdout, keep_
         os.system("mv " + tmpdir + " " + dirname)
 
 
-def process_vcf(vcf, homs, conf, output, single_batch=False, keep_tmpdir=False):
+def process_vcf(vcf, gt_policy, conf, output, single_batch=False, keep_tmpdir=False):
     """
     Perform analyses for each variant in the VCF file.
     :param input_vcf:
@@ -268,11 +270,11 @@ def process_vcf(vcf, homs, conf, output, single_batch=False, keep_tmpdir=False):
     logging.info("Processing variants in file " + vcf)
     if single_batch:
         logging.info("Processing all variants as one batch")
-        process_batch(list(input_vars), vcf.replace(".vcf", "-tmpfiles"), conf, homs, output=output, keep_tmpdir=keep_tmpdir)
+        process_batch(list(input_vars), vcf.replace(".vcf", "-tmpfiles"), conf, gt_policy, output=output, keep_tmpdir=keep_tmpdir)
     else:
         for batchnum, batch in enumerate(util.batch_variants(input_vars, max_batch_size=1000, min_safe_dist=2000)):
             logging.info("Processing batch #" + str(batchnum) + " containing " + str(len(batch)) + " variants")
-            process_batch(batch, vcf.replace(".vcf", "-tmpfiles-") + str(batchnum), conf, homs, output=output, keep_tmpdir=keep_tmpdir)
+            process_batch(batch, vcf.replace(".vcf", "-tmpfiles-") + str(batchnum), conf, gt_policy, output=output, keep_tmpdir=keep_tmpdir)
 
 
 
@@ -288,7 +290,8 @@ if __name__=="__main__":
     parser.add_argument("-b", "--batch", help="Treat each input VCF file as a single batch (default False)", action='store_true')
     parser.add_argument("-s", "--seed", help="Random seed", default=None)
     parser.add_argument("-o", "--output", help="Output destination", default=sys.stdout)
-    parser.add_argument("--het", help="Run all variants as hets (default false, run everything as homs)", action='store_true')
+    parser.add_argument("--het", help="Force all simulated variants to be hets", action='store_true')
+    parser.add_argument("--hom", help="Force all simulated variants to be homozygotes", action='store_true')
     args = parser.parse_args()
 
     conf = cp.SafeConfigParser()
@@ -300,8 +303,17 @@ if __name__=="__main__":
     if args.seed is not None:
         random.seed(args.seed)
 
+    if args.het and args.hom:
+        raise ValueError('Specify just one of --het or --hom')
+
+    gt_policy = bam_simulation.USE_GT
+    if args.het:
+        gt_policy = bam_simulation.ALL_HETS
+    if args.hom:
+        gt_policy = bam_simulation.ALL_HOMS
+
     for vcf in args.vcf:
-        process_vcf(vcf, not args.het, conf, args.output, single_batch=args.batch, keep_tmpdir=args.keep)
+        process_vcf(vcf, gt_policy, conf, args.output, single_batch=args.batch, keep_tmpdir=args.keep)
 
     try:
         args.output.close()

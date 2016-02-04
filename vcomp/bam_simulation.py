@@ -1,15 +1,15 @@
 import os
-import random
-import string
 import subprocess
-
+import util
 import pysam
-
-import callers
 import read_simulator as rs
 
+ALL_HETS="all hets"
+ALL_HOMS="all homs"
+USE_GT="use gt"
+EACH_ALT="each alt"
 
-def gen_alt_genome(variant, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
+def gen_alt_genome(chrom, start, ref, alt, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
     """
     Generate a new genome fasta that contains the given variant
     :param variant: Tuple of (chr, pos, ref, alt)
@@ -22,20 +22,18 @@ def gen_alt_genome(variant, orig_genome_path, dest_filename, overwrite=False, wi
     if os.path.exists(dest_filename) and not overwrite:
         raise ValueError("Destination " + dest_filename + " exists and overwrite is set to False")
 
-    mod_var_start = variant.start + 1
-    ref = pysam.FastaFile(orig_genome_path)
-    seq = ref.fetch(variant.chrom, mod_var_start-window_size/2, mod_var_start+window_size/2)
-    alt = seq[0:window_size/2-1] + variant.alts[0] + seq[window_size/2+len(variant.ref)-1:]
-    #print "Ref coords of injection window: " + str( variant[1]-window_size/2) + "-" + str( variant[1]+window_size/2)
-    #print "Replacing " + seq[window_size/2-5:window_size/2+5] + " with " + alt[len(alt)/2-5:len(alt)/2+5]
+    mod_var_start = start + 1
+    ref_genome = pysam.FastaFile(orig_genome_path)
+    seq = ref_genome.fetch(chrom, mod_var_start-window_size/2, mod_var_start+window_size/2)
+    alt = seq[0:window_size/2-1] + alt + seq[window_size/2+len(ref)-1:]
     dest = open(dest_filename, "w")
-    dest.write(">" + variant.chrom + "\n")
+    dest.write(">" + chrom + "\n")
     dest.write(alt)
     dest.close()
 
     #Generate fai
     dest_index = open(dest_filename + ".fai", "w")
-    dest_index.write(str(variant.chrom) + "\t" + str(len(alt)) + "\t" + str(len(variant.chrom)+1) + "\t" + str(len(alt)+1) + "\t" + str(len(alt)+1) + "\n")
+    dest_index.write(str(chrom) + "\t" + str(len(alt)) + "\t" + str(len(chrom)+1) + "\t" + str(len(alt)+1) + "\t" + str(len(alt)+1) + "\n")
     dest_index.close()
     return len(alt)
 
@@ -78,20 +76,36 @@ def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     subprocess.check_call(script_path, shell=True)
     return dest
 
-def gen_alt_fq(ref_path, variants, homs=True, depth=250):
+def gen_alt_fq(ref_path, variants, depth, policy=ALL_HOMS):
     reads1 = "input_r1.fq"
     reads2 = "input_r2.fq"
     read1_fh = open(reads1, "w")
     read2_fh = open(reads2, "w")
     for variant in variants:
-        alt_genome_path = 'alt_genome' + "".join([random.choice(string.ascii_lowercase + string.ascii_uppercase) for _ in range(10)]) + '.fa'
-        alt_genome_size = gen_alt_genome(variant, ref_path, alt_genome_path, overwrite=True)
 
-        if homs:
-            generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2,read_count=depth, read1_fh=read1_fh, read2_fh=read2_fh)
-        else:
-            generate_reads(ref_path, variant.chrom, variant.start, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
-            generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
+        if policy==ALL_HOMS:
+            alleles = variant.alts[0]
+        if policy==ALL_HETS:
+            alleles = (variant.ref, variant.alts[0])
+        if policy==USE_GT:
+            all = [variant.ref]
+            all.extend(variant.alts)
+            alleles = []
+            for i in variant.samples[0]['GT']:
+                alleles.append(all[i])
+        if policy==EACH_ALT:
+            alleles = variant.alts
+
+        for alt in alleles:
+            alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
+            alt_genome_size = gen_alt_genome(variant.chrom, variant.start, variant.ref, alt, ref_path, alt_genome_path, overwrite=True)
+            generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, read_count=depth/len(alleles), read1_fh=read1_fh, read2_fh=read2_fh)
+
+        # if homs:
+        #     generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2,read_count=depth, read1_fh=read1_fh, read2_fh=read2_fh)
+        # else:
+        #     generate_reads(ref_path, variant.chrom, variant.start, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
+        #     generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
 
     read1_fh.close()
     read2_fh.close()

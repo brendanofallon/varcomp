@@ -118,7 +118,7 @@ class GTModException(Exception):
         self.msg = msg
 
     def __str__(self):
-        return "GT modification exception: " + msg
+        return "GT modification exception: " + self.msg
 
 def region_to_bedfile(region):
     """
@@ -173,7 +173,7 @@ def find_matching_var(vars, region):
     return matches
 
 
-def write_vcf(variants, filename, conf, gt="1/1"):
+def write_vcf(variants, filename, conf, genotype):
     """
     Write the variants in the list to a vcf file. Doesn't do any sorting. By default genotype fields are hom alt (1/1)
     :param variants: List of input variants to write
@@ -187,11 +187,18 @@ def write_vcf(variants, filename, conf, gt="1/1"):
     fh.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     fh.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for variant in variants:
+        if genotype is None:
+            if len(variant.samples)==0 or ('GT' not in variant.samples[0]):
+                raise ValueError('No GT specified for vcf writing, and input variants do not contain any GT fields')
+            else:
+                gt = "/".join([str(i) for i in variant.samples[0]['GT']])
+        else:
+            gt = genotype
         fh.write(variant.chrom + "\t")
         fh.write(str(variant.start+1) + "\t") #Remember - internally 0-based coords, but in vcf 1-based
         fh.write("." + "\t")
         fh.write(variant.ref + "\t")
-        fh.write(variant.alts[0] + "\t")
+        fh.write(",".join(variant.alts) + "\t")
         fh.write("100" + "\t")
         fh.write("PASS" + "\t")
         fh.write("." + "\t")
@@ -263,7 +270,7 @@ def canadd(var, batch, max_batch_size, min_safe_dist=2000):
             return False
     return True
 
-def batch_variants(vars, max_batch_size=50, min_safe_dist=2000):
+def batch_variants(vars, max_batch_size=1000, min_safe_dist=2000):
     """
     Given a list of variants, group them into batches such that no batch contains two variants
     whose start positions are within min_safe_dist bases of each other

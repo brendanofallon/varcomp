@@ -33,17 +33,13 @@ def find_vgraph_vcfeval_mismatches(var_results, var):
 
 def find_normalizer_breaks(var_results, var):
     breaks = []
-    comp_method = "vcfeval:"
+    comp_method = "vgraph:"
+    norm_method1 = "vapleft"
+    nonorm_method = "nonorm"
     for caller in var_results:
         try:
-            res = None
-            res_method = None
-            for norm_method in var_results[caller]:
-                if res is None:
-                    res = var_results[caller][norm_method][comp_method]
-                    res_method = norm_method
-                if var_results[caller][norm_method][comp_method] != res:
-                    breaks.append( (caller, norm_method, var, var_results[caller][norm_method][comp_method], res_method + "=" +res) )
+             if var_results[caller][nonorm_method][comp_method] == injectvar.MATCH_RESULT and var_results[caller][norm_method1][comp_method] != injectvar.MATCH_RESULT:
+                 breaks.append( (caller, var, norm_method1 + ": " + var_results[caller][norm_method1][comp_method], nonorm_method + ": " + var_results[caller][nonorm_method][comp_method]) )
         except:
             pass
     return breaks
@@ -202,3 +198,5 @@ for case in normalizer_issues:
 print "\n\n VAP/leftalign fails, fixed by vcfeval:"
 for case in vap_fails:
     print "\t".join(list(case))
+
+
