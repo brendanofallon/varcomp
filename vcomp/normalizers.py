@@ -67,9 +67,9 @@ def normalize_bcftools(orig_vcf, conf):
 
 def get_normalizers():
     return {
-        'vapleft': normalize_vap_leftalign,
+        #'vapleft': normalize_vap_leftalign,
         'nonorm': normalize_nothing,
-        'vt': normalize_vt,
+        #'vt': normalize_vt,
         # 'bcftools': normalize_bcftools
     }
 

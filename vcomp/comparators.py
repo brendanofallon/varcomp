@@ -156,7 +156,7 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
         vstr = str(var)
         if "type=FP" in vstr:
             caller_unmatched.append(var)
-            if "kind=gtmismatch" in vstr:
+            if "kind=gtmismatch" in vstr or "kind=alpartial" in vstr:
                 orig_unmatched.append(var)
         elif "type=TP" in vstr:
             matches.append( (var, var) )
@@ -173,7 +173,7 @@ def get_comparators():
         "raw": compare_raw,
         "vgraph": compare_vgraph,
         "vcfeval": compare_vcfeval,
-        "happy": compare_happy
+        #"happy": compare_happy
     }
 
 

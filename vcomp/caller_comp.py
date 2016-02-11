@@ -69,7 +69,7 @@ def process_vcf(input_vcf, homs, conf):
     """
 
 
-    batches = batch_variants(pysam.VariantFile(input_vcf))
+    batches = injectvar.batch_variants(pysam.VariantFile(input_vcf))
     assert sum([len(b) for b in batches]) == len(list(pysam.VariantFile(input_vcf)))
     #for batch in batches:
     #    print "\n Batch of size " + str(len(batch))

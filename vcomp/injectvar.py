@@ -10,6 +10,7 @@ import pysam
 import logging
 import random
 import bam_simulation, callers, comparators, normalizers
+from collections import namedtuple
 
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
@@ -22,6 +23,8 @@ ZYGOSITY_MISSING_ALLELE="Missing allele"
 ZYGOSITY_MISSING_TWO_ALLELES="Missing two alleles!"
 
 all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, MATCH_WITH_EXTRA_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
+
+ExSNPInfo = namedtuple('ExSNPInfo', ['policy', 'dist'])
 
 def result_from_tuple(tup):
     """
@@ -109,7 +112,7 @@ def compare_single_var(result, bedregion, orig_vars, caller_vars, comparator, in
     :return:
     """
     result_str = result_from_tuple(result)
-    if result_str == NO_MATCH_RESULT  and len(inputgt.split("/"))==2:
+    if result_str == NO_MATCH_RESULT  and (inputgt in util.ALL_HET_GTS or inputgt in util.ALL_HOMALT_GTS):
         try:
             gt_mod_vars = util.set_genotypes(caller_vars, inputgt, bedregion, conf)
             bedfile = util.region_to_bedfile(bedregion)
@@ -146,7 +149,62 @@ def split_results(allresults, bed):
 
     return reg_results
 
-def process_batch(variant_batch, batchname, conf, gt_policy, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
+def create_variant_sets(vars, ex_snp_info, default_policy, ref_genome):
+    """
+    Create a list of variant 'sets', where each set is a list of possibly-phased variants to add to two
+    alternate reference genomes. If ex_snp_info isn't None, extra SNPs are added to each input variant, otherwise,
+    every variant ends up in its own unique set.
+    Default-pol
+    :param vars:
+    :param ex_snp_info:
+    :param default_policy: Genotype policy for original variants - either None (read GT from sample field), ALL_HETS, or ALL_HOMS
+    :param ref_genome:
+    :return:
+    """
+    sets = []
+    if ex_snp_info is not None and ex_snp_info.dist >=0:
+        raise ValueError('Positive snp distances are currently not supported')
+
+    default_gt = None
+    if default_policy ==  bam_simulation.ALL_HOMS:
+        default_gt = "1|1"
+    if default_policy ==  bam_simulation.ALL_HETS:
+        default_gt = "0|1"
+
+    for var in vars:
+        vset = {}
+        if ex_snp_info is None:
+            vset['policy'] = default_policy
+            vset['vars'] = [ util.pysamVar_to_Variant(var, default_gt) ]
+        else:
+            vset['policy'] = ex_snp_info.policy
+
+            if ex_snp_info.policy == bam_simulation.ALL_HOMS:
+                snp_gt = "1/1"
+                if default_gt is None:
+                    var_gt = "1/1"
+                else:
+                    var_gt = default_gt
+            elif ex_snp_info.policy == bam_simulation.CIS:
+                snp_gt = "0|1"
+                if default_gt is None:
+                    var_gt = "0|1"
+                else:
+                    var_gt = default_gt
+            elif ex_snp_info.policy == bam_simulation.TRANS:
+                snp_gt = "0|1"
+                if default_gt is None or default_policy == bam_simulation.ALL_HETS:
+                    var_gt = "1|0"
+                else:
+                    var_gt = default_gt
+            newsnp = util.gen_snp(var.chrom, var.start + ex_snp_info.dist, snp_gt, ref_genome)
+            vset['vars'] = [newsnp]
+            vset['vars'].append(util.pysamVar_to_Variant(var, var_gt))
+        sets.append(vset)
+
+    return sets
+
+def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
     """
     Process the given batch of variants by creating a fake 'genome' with the variants, simulating reads from it,
      aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
@@ -165,18 +223,18 @@ def process_batch(variant_batch, batchname, conf, gt_policy, output=sys.stdout, 
         pass
     os.chdir(tmpdir)
 
-    #The GT field to use in the true input VCF
-    true_gt = None
-    if gt_policy == bam_simulation.ALL_HETS:
-        true_gt = "0/1"
-    if gt_policy == bam_simulation.ALL_HOMS:
-        true_gt = "1/1"
-
+    ref_path = conf.get('main', 'ref_genome')
     try:
-        orig_vcf = util.write_vcf(variant_batch, "test_input.vcf", conf, true_gt)
-        ref_path = conf.get('main', 'ref_genome')
-        bed = util.vars_to_bed(variant_batch)
-        reads = bam_simulation.gen_alt_fq(ref_path, variant_batch, read_depth, policy=gt_policy)
+
+        variant_sets = create_variant_sets(variant_batch, ex_snp, gt_policy, pysam.FastaFile(ref_path))
+        allvars = []
+        for vset in variant_sets:
+            allvars.extend( vset['vars'] )
+        variant_batch = sorted(allvars, cmp=util.variant_comp)
+        orig_vcf = util.write_vcf(variant_batch, "test_input.vcf", conf)
+
+        bed = util.vars_to_bed(variant_sets)
+        reads = bam_simulation.gen_alt_fq(ref_path, variant_sets, read_depth)
         bam = bam_simulation.gen_alt_bam(ref_path, conf, reads)
 
         var_results = {}
@@ -202,12 +260,14 @@ def process_batch(variant_batch, batchname, conf, gt_policy, output=sys.stdout, 
                     logging.info("Running comparator " + comparator_name)
                     for region, result in zip(util.read_regions(bed), single_results):
                         match_vars = util.find_matching_var( pysam.VariantFile(orig_vcf), region)
-                        if len(match_vars)!=1:
+                        if len(match_vars)==0:
                             raise ValueError('Unable to find original variant from region!')
 
                         result = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, "/".join([str(i) for i in match_vars[0].samples[0]['GT']]), conf)
 
-                        match_var = " ".join(str(match_vars[0]).split()[0:5])
+
+                        match_var = "(" + "/".join([" ".join(str(mvar).split()[0:5]) for mvar in match_vars])+ ")"
+
                         if match_var not in var_results:
                             var_results[match_var] = {}
                         if caller not in var_results[match_var]:
@@ -257,7 +317,7 @@ def process_batch(variant_batch, batchname, conf, gt_policy, output=sys.stdout, 
         os.system("mv " + tmpdir + " " + dirname)
 
 
-def process_vcf(vcf, gt_policy, conf, output, single_batch=False, keep_tmpdir=False):
+def process_vcf(vcf, gt_default, conf, output, snp_info=None, single_batch=False, keep_tmpdir=False, disable_flagging=False, read_depth=250):
     """
     Perform analyses for each variant in the VCF file.
     :param input_vcf:
@@ -270,11 +330,11 @@ def process_vcf(vcf, gt_policy, conf, output, single_batch=False, keep_tmpdir=Fa
     logging.info("Processing variants in file " + vcf)
     if single_batch:
         logging.info("Processing all variants as one batch")
-        process_batch(list(input_vars), vcf.replace(".vcf", "-tmpfiles"), conf, gt_policy, output=output, keep_tmpdir=keep_tmpdir)
+        process_batch(list(input_vars), vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
     else:
         for batchnum, batch in enumerate(util.batch_variants(input_vars, max_batch_size=1000, min_safe_dist=2000)):
             logging.info("Processing batch #" + str(batchnum) + " containing " + str(len(batch)) + " variants")
-            process_batch(batch, vcf.replace(".vcf", "-tmpfiles-") + str(batchnum), conf, gt_policy, output=output, keep_tmpdir=keep_tmpdir)
+            process_batch(batch, vcf.replace(".vcf", "-tmpfiles-") + str(batchnum), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
 
 
 
@@ -290,6 +350,11 @@ if __name__=="__main__":
     parser.add_argument("-b", "--batch", help="Treat each input VCF file as a single batch (default False)", action='store_true')
     parser.add_argument("-s", "--seed", help="Random seed", default=None)
     parser.add_argument("-o", "--output", help="Output destination", default=sys.stdout)
+    parser.add_argument("-r", "--readdepth", help="Number of reads to generate per variant", default=250, type=int)
+    parser.add_argument("-d", "--dontflag", help="Disable temp dir flagging", action='store_true')
+    parser.add_argument("-a", "--addsnp", help="Add a SNP upstream of each variant", action='store_true')
+    parser.add_argument("-t", "--trans", help="If SNP is added, add it in trans (default cis)", action='store_true')
+    parser.add_argument("--snphom", help="Added SNPs are homozygous (default het)", action='store_true')
     parser.add_argument("--het", help="Force all simulated variants to be hets", action='store_true')
     parser.add_argument("--hom", help="Force all simulated variants to be homozygotes", action='store_true')
     args = parser.parse_args()
@@ -306,14 +371,25 @@ if __name__=="__main__":
     if args.het and args.hom:
         raise ValueError('Specify just one of --het or --hom')
 
-    gt_policy = bam_simulation.USE_GT
+    gt_default = None
     if args.het:
-        gt_policy = bam_simulation.ALL_HETS
+        gt_default = bam_simulation.ALL_HETS
     if args.hom:
-        gt_policy = bam_simulation.ALL_HOMS
+        gt_default = bam_simulation.ALL_HOMS
+
+    snp_inf = None
+    if args.addsnp:
+        if args.trans:
+            snp_policy = bam_simulation.TRANS
+        else:
+            snp_policy = bam_simulation.CIS
+        if args.snphom:
+            snp_policy = bam_simulation.ALL_HOMS
+        snp_inf = ExSNPInfo(policy=snp_policy, dist=-4)
+
 
     for vcf in args.vcf:
-        process_vcf(vcf, gt_policy, conf, args.output, single_batch=args.batch, keep_tmpdir=args.keep)
+        process_vcf(vcf, gt_default, conf, args.output, snp_info=snp_inf, single_batch=args.batch, keep_tmpdir=args.keep, read_depth=args.readdepth, disable_flagging=args.dontflag)
 
     try:
         args.output.close()

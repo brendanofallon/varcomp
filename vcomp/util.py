@@ -17,9 +17,11 @@ ALL_HOMALT_GTS = ["1/1", "1|1"]
 
 DEFAULT_CONTIG_ORDER=['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3', '4', '5', '6', '7', '8','9', 'MT', 'X','Y']
 
+Variant = namedtuple('Variant', ['chrom', 'start', 'ref', 'alts', 'gt'])
+
 def var_comp(v1, v2):
     """
-    Comparator for two variants - chromosome first (according to DEFAULT_CONTIG_ORDER), then position
+    Comparator for two tokenized VCF lines - chromosome first (according to DEFAULT_CONTIG_ORDER), then position
     :param v1:
     :param v2:
     :return:
@@ -30,6 +32,15 @@ def var_comp(v1, v2):
         return int(v1[1]) - int(v2[1])
     else:
         return v1c - v2c
+
+def variant_comp(v1, v2):
+    """
+    Adapter tomake var_comp sorter compatible with actual variants
+    :param v1:
+    :param v2:
+    :return:
+    """
+    return var_comp( (v1.chrom, v1.start), (v2.chrom, v2.start) )
 
 def sort_vcf(vcf, conf):
 
@@ -68,9 +79,19 @@ def bgz_tabix(path, conf):
         path = path + ".gz"
     cmd = conf.get('main', 'tabix_path') + " -f " + path
     subprocess.check_call(cmd.split())
-
     return path
 
+def pysamVar_to_Variant(pvar, default_gt):
+    try:
+        gt = pvar.samples[0]['GT']
+        alleles = [pvar.ref]
+        alleles.extend(pvar.alts)
+        gt = "/".join([str( alleles.index(g)) for g in gt])
+    except:
+        if default_gt is None:
+            raise ValueError('No default GT specified, and variant does not contain GT information: ' + str(pvar))
+        gt = default_gt
+    return Variant(pvar.chrom, pvar.start, pvar.ref, pvar.alts, gt)
 
 
 def set_genotypes(orig_vcf, newGT, region, conf):
@@ -142,7 +163,8 @@ def vars_to_bed(variants, window=500):
     """
     bedfilename = "var_regions" + randstr() + ".bed"
     with open(bedfilename, "w") as bfh:
-        for var in variants:
+        for vset in variants:
+            var = vset['vars'][0]
             bfh.write("\t".join([var.chrom, str(var.start-window), str(var.start+window)]) + "\n")
 
     return bedfilename
@@ -172,8 +194,17 @@ def find_matching_var(vars, region):
     matches = [var for var in vars if var.chrom==region.chr and var.start >= region.start and var.start <= region.end]
     return matches
 
+def gen_snp(chrom, pos, gt, ref_genome):
+    currentbase = ref_genome.fetch(chrom, pos, pos+1)
+    bases = ['A', 'C', 'G', 'T']
+    bases.remove(currentbase)
+    newbase = random.choice(bases)
+    newvar = Variant(chrom, pos, currentbase, (newbase,), gt)
+    return newvar
 
-def write_vcf(variants, filename, conf, genotype):
+
+
+def write_vcf(variants, filename, conf):
     """
     Write the variants in the list to a vcf file. Doesn't do any sorting. By default genotype fields are hom alt (1/1)
     :param variants: List of input variants to write
@@ -186,14 +217,7 @@ def write_vcf(variants, filename, conf, genotype):
     fh.write("##fileformat=VCFv4.1\n")
     fh.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     fh.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
-    for variant in variants:
-        if genotype is None:
-            if len(variant.samples)==0 or ('GT' not in variant.samples[0]):
-                raise ValueError('No GT specified for vcf writing, and input variants do not contain any GT fields')
-            else:
-                gt = "/".join([str(i) for i in variant.samples[0]['GT']])
-        else:
-            gt = genotype
+    for variant in sorted(variants, cmp=variant_comp):
         fh.write(variant.chrom + "\t")
         fh.write(str(variant.start+1) + "\t") #Remember - internally 0-based coords, but in vcf 1-based
         fh.write("." + "\t")
@@ -203,7 +227,7 @@ def write_vcf(variants, filename, conf, genotype):
         fh.write("PASS" + "\t")
         fh.write("." + "\t")
         fh.write("GT" + "\t")
-        fh.write(gt + "\n")
+        fh.write(variant.gt + "\n")
     fh.close()
     return compress_vcf(filename, conf)
 
@@ -298,3 +322,4 @@ def batch_variants(vars, max_batch_size=1000, min_safe_dist=2000):
             batches.append(batch)
 
     return batches
+

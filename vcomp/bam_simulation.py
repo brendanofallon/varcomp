@@ -5,11 +5,14 @@ import pysam
 import read_simulator as rs
 
 ALL_HETS="all hets"
+CIS = "cis"
+TRANS = "trans"
 ALL_HOMS="all homs"
-USE_GT="use gt"
-EACH_ALT="each alt"
+# USE_GT="use gt"
+# EACH_ALT="each alt"
 
-def gen_alt_genome(chrom, start, ref, alt, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
+
+def gen_alt_genome(chrom, pvars, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
     """
     Generate a new genome fasta that contains the given variant
     :param variant: Tuple of (chr, pos, ref, alt)
@@ -22,20 +25,28 @@ def gen_alt_genome(chrom, start, ref, alt, orig_genome_path, dest_filename, over
     if os.path.exists(dest_filename) and not overwrite:
         raise ValueError("Destination " + dest_filename + " exists and overwrite is set to False")
 
-    mod_var_start = start + 1
+    pvars = sorted(pvars, key=lambda x: x[0], reverse=True)
     ref_genome = pysam.FastaFile(orig_genome_path)
-    seq = ref_genome.fetch(chrom, mod_var_start-window_size/2, mod_var_start+window_size/2)
-    alt = seq[0:window_size/2-1] + alt + seq[window_size/2+len(ref)-1:]
+    mod_var_start = pvars[0][0] + 1 #Start position of first variant
+    window_start = mod_var_start-window_size/2
+    window_end = mod_var_start+window_size/2
+    seq = ref_genome.fetch(chrom, window_start, window_end)
+    newseq = seq
+
+    for start, ref, alt in pvars:
+        dstart = start - window_start
+        newseq = newseq[0:dstart] + alt + newseq[dstart+len(ref):]
+
     dest = open(dest_filename, "w")
     dest.write(">" + chrom + "\n")
-    dest.write(alt)
+    dest.write(newseq)
     dest.close()
 
     #Generate fai
     dest_index = open(dest_filename + ".fai", "w")
-    dest_index.write(str(chrom) + "\t" + str(len(alt)) + "\t" + str(len(chrom)+1) + "\t" + str(len(alt)+1) + "\t" + str(len(alt)+1) + "\n")
+    dest_index.write(str(chrom) + "\t" + str(len(newseq)) + "\t" + str(len(chrom)+1) + "\t" + str(len(newseq)+1) + "\t" + str(len(newseq)+1) + "\n")
     dest_index.close()
-    return len(alt)
+    return len(newseq)
 
 def generate_reads(alt_genome_path, chr, pos, read_count=250, prefix="test-reads", read1_fh=None, read2_fh=None):
     """
@@ -76,36 +87,74 @@ def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     subprocess.check_call(script_path, shell=True)
     return dest
 
-def gen_alt_fq(ref_path, variants, depth, policy=ALL_HOMS):
+def gen_bam_stats(bamfile):
+    """
+    Calculate various metrics, like total reads, reads with MQ > X, perhaps some measure of reference bias, etc.
+    :param bamfile:
+    :return:
+    """
+    pass
+
+def collect_alts(vset):
+    """
+    Given a list of variants and a 'policy' describing how to arrange them, construct two haplotypes representing
+    phased versions of the variants. Each 'haplotype' is a list of a start position, reference allele, and single alt allele,
+    (these lists are then used to construct a fasta genome from which we can simulate reads).
+    Note that CIS and TRANS are not very well defined if there are multi-alt variants in the vars
+    :param vset:
+    :return:
+    """
+    hap1 = []
+    hap2 = []
+    policy = vset['policy']
+    for i,var in enumerate(vset['vars']):
+        if policy == ALL_HOMS:
+            if len(var.alts)>1:
+                raise ValueError("Can't use ALL_HOMS policy for variants with multiple alts")
+            hap1.append( (var.start, var.ref, var.alts[0]) )
+            hap2.append( (var.start, var.ref, var.alts[0]) )
+        elif policy == TRANS:
+            first = i%2==0
+            for alt in var.alts:
+                if first:
+                    hap1.append( (var.start, var.ref, alt) )
+                    hap2.append( (var.start, var.ref, var.ref) ) #Required to add non-alt allele so we can still generate an alt genome
+                else:
+                    hap2.append( (var.start, var.ref, alt) )
+                    hap1.append( (var.start, var.ref, var.ref) )
+
+                first = not first
+        elif policy == CIS:
+            first = True
+            for alt in var.alts:
+                if first:
+                    hap1.append( (var.start, var.ref, alt) )
+                    hap2.append( (var.start, var.ref, var.ref) )
+                else:
+                    hap2.append( (var.start, var.ref, alt) )
+                    hap1.append( (var.start, var.ref, var.ref) )
+                first = not first
+        else:
+            raise ValueError('Unrecognized phasing policy: ' + policy)
+
+    return hap1, hap2
+
+def gen_alt_fq(ref_path, variant_sets, depth):
     reads1 = "input_r1.fq"
     reads2 = "input_r2.fq"
     read1_fh = open(reads1, "w")
     read2_fh = open(reads2, "w")
-    for variant in variants:
+    for vset in variant_sets:
+        chrom = vset['vars'][0].chrom
+        hap1, hap2 = collect_alts(vset)
 
-        if policy==ALL_HOMS:
-            alleles = variant.alts[0]
-        if policy==ALL_HETS:
-            alleles = (variant.ref, variant.alts[0])
-        if policy==USE_GT:
-            all = [variant.ref]
-            all.extend(variant.alts)
-            alleles = []
-            for i in variant.samples[0]['GT']:
-                alleles.append(all[i])
-        if policy==EACH_ALT:
-            alleles = variant.alts
+        alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
+        alt_genome_size = gen_alt_genome(chrom, hap1, ref_path, alt_genome_path, overwrite=True)
+        generate_reads(alt_genome_path, chrom, alt_genome_size/2, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
 
-        for alt in alleles:
-            alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
-            alt_genome_size = gen_alt_genome(variant.chrom, variant.start, variant.ref, alt, ref_path, alt_genome_path, overwrite=True)
-            generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, read_count=depth/len(alleles), read1_fh=read1_fh, read2_fh=read2_fh)
-
-        # if homs:
-        #     generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2,read_count=depth, read1_fh=read1_fh, read2_fh=read2_fh)
-        # else:
-        #     generate_reads(ref_path, variant.chrom, variant.start, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
-        #     generate_reads(alt_genome_path, variant.chrom, alt_genome_size/2, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
+        alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
+        alt_genome_size = gen_alt_genome(chrom, hap2, ref_path, alt_genome_path, overwrite=True)
+        generate_reads(alt_genome_path, chrom, alt_genome_size/2, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
 
     read1_fh.close()
     read2_fh.close()

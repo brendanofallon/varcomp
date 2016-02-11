@@ -158,7 +158,8 @@ print "\nCaller err breakdown: mismatch / extra allele / missing allele / no var
 
 norm_method = "nonorm"
 comp_method = "vcfeval:"
-print "\t" + norm_method
+print "Comparisons made with " +norm_method + " / " + comp_method
+print "\t" + "\t".join(["mismatch", "extra allele", "missing allele", "additional false vars", "no variant found"])
 for caller in results:
     print caller + "\t",
     tot = 0.0
@@ -168,6 +169,7 @@ for caller in results:
     print formatted(results[caller][norm_method][comp_method], tot, injectvar.NO_MATCH_RESULT),
     print formatted(results[caller][norm_method][comp_method], tot, injectvar.ZYGOSITY_EXTRA_ALLELE),
     print formatted(results[caller][norm_method][comp_method], tot, injectvar.ZYGOSITY_MISSING_ALLELE),
+    print formatted(results[caller][norm_method][comp_method], tot, injectvar.MATCH_WITH_EXTRA_RESULT),
     print formatted(results[caller][norm_method][comp_method], tot, injectvar.NO_VARS_FOUND_RESULT),
     print "\n",
 
