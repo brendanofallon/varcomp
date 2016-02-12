@@ -173,7 +173,7 @@ def get_comparators():
         "raw": compare_raw,
         "vgraph": compare_vgraph,
         "vcfeval": compare_vcfeval,
-        #"happy": compare_happy
+        "happy": compare_happy
     }
 
 

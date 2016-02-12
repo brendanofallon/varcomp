@@ -266,7 +266,7 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
                         result = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, "/".join([str(i) for i in match_vars[0].samples[0]['GT']]), conf)
 
 
-                        match_var = "(" + "/".join([" ".join(str(mvar).split()[0:5]) for mvar in match_vars])+ ")"
+                        match_var = "/".join([" ".join(str(mvar).split()[0:5]) for mvar in match_vars])
 
                         if match_var not in var_results:
                             var_results[match_var] = {}
@@ -283,7 +283,7 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
             for caller, cresults in vresults.iteritems():
                 for normalizer_name, compresults in cresults.iteritems():
                     for comparator_name, result in compresults.iteritems():
-                        output.write("Result for " + var + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result + "\n")
+                        output.write(var + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result + "\n")
 
         if not disable_flagging:
             for origvar in var_results.keys():

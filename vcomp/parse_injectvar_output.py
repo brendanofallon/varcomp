@@ -1,14 +1,16 @@
 import sys
-
+from collections import namedtuple, defaultdict
 import injectvar
 
 results_by_method = {}
-results = {}
+results = defaultdict(dict)
 vgraph_vcfeval_mismatches = []
 normalizer_issues = []
 vap_fails = []
-all_methods = []
-all_comp_methods = []
+all_methods = set()
+all_comp_methods = set()
+
+ResultEntry = namedtuple('ResultEntry', ['variants', 'caller', 'normalizer', 'comparator', 'result'])
 
 def formatted(results, tot, result):
     if tot==0.0:
@@ -25,15 +27,15 @@ def find_vgraph_vcfeval_mismatches(var_results, var):
     mismatches = []
     for caller in var_results:
         for norm_method in var_results[caller]:
-            if "happy:" in var_results[caller][norm_method] and "vcfeval:" in var_results[caller][norm_method] and var_results[caller][norm_method]["vcfeval:"] != injectvar.NO_VARS_FOUND_RESULT:
-                if var_results[caller][norm_method]["happy:"] != var_results[caller][norm_method]["vcfeval:"]:
-                    mismatches.append( (caller, norm_method, var, var_results[caller][norm_method]["happy:"], var_results[caller][norm_method]["vcfeval:"]) )
+            if "happy" in var_results[caller][norm_method] and "vcfeval" in var_results[caller][norm_method] and var_results[caller][norm_method]["vcfeval"] != injectvar.NO_VARS_FOUND_RESULT:
+                if var_results[caller][norm_method]["happy"] != var_results[caller][norm_method]["vcfeval"]:
+                    mismatches.append( (caller, norm_method, var, var_results[caller][norm_method]["happy"], var_results[caller][norm_method]["vcfeval"]) )
     return mismatches
 
 
 def find_normalizer_breaks(var_results, var):
     breaks = []
-    comp_method = "vgraph:"
+    comp_method = "vgraph"
     norm_method1 = "vapleft"
     nonorm_method = "nonorm"
     for caller in var_results:
@@ -49,71 +51,60 @@ def find_vapfails_vgraph_hits(var_results, var):
     fixes = []
     for caller in var_results:
         try:
-            vap_result = var_results[caller]["vapleft"]["raw:"]
-            vcfeval_result = var_results[caller]["nonorm"]["vcfeval:"]
+            vap_result = var_results[caller]["vapleft"]["raw"]
+            vcfeval_result = var_results[caller]["nonorm"]["vcfeval"]
             if vap_result != vcfeval_result:
-                fixes.append( (caller, var, "vap/leftalign:" + vap_result, "vcfeval:" + vcfeval_result))
+                fixes.append( (caller, var, "vap/leftalign" + vap_result, "vcfeval" + vcfeval_result))
         except KeyError:
             pass
     return fixes
 
 
+def parseline(line):
+    """
+    Convert a single line of injectvar output to a ResultEntry
+    :param line:
+    :return: ResultEntry containing parsed output
+    """
+    toks=line.strip().replace("Result for", "").split(':')
+    if len(toks)<3:
+        return None
 
+    variants = toks[0].split("/")
+    tools = [entry.strip() for entry in toks[1].split("/")]
+    result = toks[2].strip()
+    return ResultEntry(variants=variants, caller=tools[0], normalizer=tools[1], comparator=tools[2], result=result)
 
 #Build big dict with all results, organized by caller and then method and then result type
 
-var_results = {} #Stores all results for a single variant, helps comparing results for a single var
+var_results = defaultdict(dict) #Stores all results for a single variant, helps comparing results for a single var
 prev_var = "-1"
 for line in open(sys.argv[1], "r"):
-    if line.startswith("Result for"):
+    entry = parseline(line)
+    if entry is None:
+        continue
 
-        toks=line.strip().split(' ', 12)
-        if len(toks)<12:
-            continue
-        ref = toks[5]
-        alt = toks[6].replace(":", "")
-        caller = toks[7]
-        norm_method = toks[9]
-        comp_method = toks[11]
-        result = toks[12]
-        thisvar = toks[2] + ":" + toks[3] + ":" + ref + ":" + alt
+    thisvar = str(entry.variants)
+    if thisvar != prev_var:
+        vgraph_vcfeval_mismatches.extend( find_vgraph_vcfeval_mismatches(var_results, prev_var))
+        normalizer_issues.extend( find_normalizer_breaks(var_results, prev_var))
+        vap_fails.extend( find_vapfails_vgraph_hits(var_results, prev_var))
+        var_results = defaultdict(dict)
+        prev_var = thisvar
 
-        if thisvar != prev_var:
-            vgraph_vcfeval_mismatches.extend( find_vgraph_vcfeval_mismatches(var_results, prev_var))
-            normalizer_issues.extend( find_normalizer_breaks(var_results, prev_var))
-            vap_fails.extend( find_vapfails_vgraph_hits(var_results, prev_var))
-            var_results = {}
-            prev_var = thisvar
+    all_methods.add(entry.normalizer)
+    all_comp_methods.add(entry.comparator)
 
-        if not norm_method in all_methods:
-            all_methods.append(norm_method)
+    if not entry.normalizer in var_results[entry.caller]:
+        var_results[entry.caller][entry.normalizer] = {}
+    var_results[entry.caller][entry.normalizer][entry.comparator] = entry.result
 
-        if not comp_method in all_comp_methods:
-            all_comp_methods.append(comp_method)
+    if not entry.normalizer in results[entry.caller]:
+        results[entry.caller][entry.normalizer] = {}
+    if not entry.comparator in results[entry.caller][entry.normalizer]:
+        results[entry.caller][entry.normalizer][entry.comparator] = defaultdict(int)
+    results[entry.caller][entry.normalizer][entry.comparator][entry.result] += 1
 
-        if not caller in var_results:
-            var_results[caller] = {}
-
-        if not norm_method in var_results[caller]:
-            var_results[caller][norm_method] = {}
-
-        var_results[caller][norm_method][comp_method] = result
-
-        if not caller in results:
-            results[caller] = {}
-
-        if not norm_method in results[caller]:
-            results[caller][norm_method] = {}
-
-        if not comp_method in results[caller][norm_method]:
-            results[caller][norm_method][comp_method] = {}
-
-        resultmap = results[caller][norm_method][comp_method]
-
-        if result in resultmap:
-            resultmap[result] += 1
-        else:
-            resultmap[result] = 1
 
 
 for caller in results:
@@ -138,7 +129,7 @@ for caller in results:
 
 print "\nCaller comparison: (=matches / (matches + not matched + no vars found + incorrect genotypes))"
 
-comp_methods = ("vcfeval:",)
+comp_methods = ("vcfeval",)
 norm_method = "nonorm"
 for comp_method in comp_methods:
     print "\t" + comp_method,
@@ -157,7 +148,7 @@ for caller in results:
 print "\nCaller err breakdown: mismatch / extra allele / missing allele / no variant found"
 
 norm_method = "nonorm"
-comp_method = "vcfeval:"
+comp_method = "vcfeval"
 print "Comparisons made with " +norm_method + " / " + comp_method
 print "\t" + "\t".join(["mismatch", "extra allele", "missing allele", "additional false vars", "no variant found"])
 for caller in results:
@@ -189,15 +180,15 @@ for caller in results:
 #     print "\n",
 
 
-print "\n\n happy / vcfeval mismatches:"
+print "\n\n happy / vcfeval mismatches"
 for mismatch in vgraph_vcfeval_mismatches:
     print mismatch[1] + "\t" + mismatch[0] + "\t" + mismatch[2] + " happy: " + mismatch[3] + "  vcfeval: " + mismatch[4]
 
-print "\n\n Normalizer changing vgraph results:"
+print "\n\n Normalizer changing vgraph results"
 for case in normalizer_issues:
     print "\t".join(list(case))
 
-print "\n\n VAP/leftalign fails, fixed by vcfeval:"
+print "\n\n VAP/leftalign fails, fixed by vcfeval"
 for case in vap_fails:
     print "\t".join(list(case))
 
