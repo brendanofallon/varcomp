@@ -204,18 +204,19 @@ def create_variant_sets(vars, ex_snp_info, default_policy, ref_genome):
 
     return sets
 
-def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
+def process_batch(vcf, batchname, conf, gt_policy, ex_snp=None, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
     """
     Process the given batch of variants by creating a fake 'genome' with the variants, simulating reads from it,
      aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
      comparison methods to generate results. The results are just written to a big text file, which needs to
      be parsed by a separate utility to generate anything readable.
-    :param variant_batch: pysam.Variant object to simulate
+    :param vcf: .vcf file containing variants to simulate
     :param conf: Configuration containing paths to all required binaries / executables / genomes, etc.
     :param homs: Boolean indicating whether variants should be simulated as hets or homs
     :return:
     """
 
+    variant_batch = list(pysam.VariantFile(vcf))
     tmpdir = "tmp-working-" + util.randstr()
     try:
         os.mkdir(tmpdir)
@@ -326,15 +327,17 @@ def process_vcf(vcf, gt_default, conf, output, snp_info=None, single_batch=False
     :param conf:
     """
 
-    input_vars = pysam.VariantFile(vcf)
+    #input_vars = pysam.VariantFile(vcf)
     logging.info("Processing variants in file " + vcf)
     if single_batch:
         logging.info("Processing all variants as one batch")
-        process_batch(list(input_vars), vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
+        process_batch(vcf, vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
     else:
-        for batchnum, batch in enumerate(util.batch_variants(input_vars, max_batch_size=1000, min_safe_dist=2000)):
+        batches = enumerate(util.batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000))
+        for batchnum, batch in enumerate(batches):
             logging.info("Processing batch #" + str(batchnum) + " containing " + str(len(batch)) + " variants")
             process_batch(batch, vcf.replace(".vcf", "-tmpfiles-") + str(batchnum), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
+            os.remove(batch)
 
 
 

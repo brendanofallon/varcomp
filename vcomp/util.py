@@ -4,6 +4,8 @@ import gzip
 import random
 import string
 from collections import namedtuple
+import pysam
+import gzip
 
 HOM_REF_GT = "Hom ref."
 HET_GT = "Het"
@@ -303,8 +305,23 @@ def batch_variants(vars, max_batch_size=1000, min_safe_dist=2000):
     :param min_safe_dist: Min permissible distance between two variants in batch
     :return: List of batches containing variants
     """
+
     batches = []
-    vars = list(vars)
+    #vars = list(vars)
+    header = []
+    if vars.endswith('.gz'):
+        for x in gzip.open(vars):
+            if x.startswith('#'):
+                header.append(x)
+            else: break
+    else:
+        for x in open(vars):
+            if x.startswith('#'):
+                header.append(x)
+            else: break
+    name = vars.split('/')[-1].strip('.gz').strip('.vcf')
+    vars = list(pysam.VariantFile(vars))
+
     while len(vars)>0:
         var = vars.pop(0)
         unfilled_batches = [b for b in batches if len(b)<max_batch_size]
@@ -321,5 +338,16 @@ def batch_variants(vars, max_batch_size=1000, min_safe_dist=2000):
             batch.append(var)
             batches.append(batch)
 
-    return batches
+    #return batches
+    files = []
+    for i, batch in enumerate(batches):
+        with open('{0}.batch{1}.vcf'.format(name, i), 'w') as out:
+            for x in header:
+                out.write(x)
+            for x in batch:
+                out.write(str(x))
+        files.append('{0}.batch{1}.vcf'.format(name, i))
+    return files
+
+
 
