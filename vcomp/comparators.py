@@ -82,7 +82,7 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
     caller_out = "vgout-caller." + util.randstr() + ".vcf"
     bedcmd = ""
     if bed is not None:
-        bedcmd = " -i " + bed
+        bedcmd = " --include-regions " + bed
     vg_cmd = conf.get('main', 'vgraph_path') + " --out1 " + orig_out + " --out2 " + caller_out + " --reference " + conf.get('main', 'ref_genome') + bedcmd + " " + orig_vcf + " " + caller_vcf
     # cmd = [sys.executable]
     # cmd.extend(vg_cmd.split())
