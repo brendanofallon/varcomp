@@ -3,6 +3,7 @@ import subprocess
 import util
 import pysam
 import read_simulator as rs
+from collections import defaultdict
 
 ALL_HETS="all hets"
 CIS = "cis"
@@ -87,13 +88,30 @@ def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     subprocess.check_call(script_path, shell=True)
     return dest
 
-def gen_bam_stats(bamfile):
+def gen_bam_stats(bamfile, region=None):
     """
     Calculate various metrics, like total reads, reads with MQ > X, perhaps some measure of reference bias, etc.
     :param bamfile:
     :return:
     """
-    pass
+    stats = defaultdict(int)
+    af = pysam.AlignmentFile(bamfile)
+    for read in af.fetch(region[0], region[1], region[2]):
+        stats['total_reads'] += 1
+        if read.is_proper_pair:
+            stats['properpair'] += 1
+        if read.mapping_quality > 20:
+            stats['mq20'] += 1
+        if read.mapping_quality > 40:
+            stats['mq40'] += 1
+        softclipped = 0
+        for item in read.cigartuples:
+            if item[0] == 4:
+                softclipped += item[1]
+        stats['softclipped_bases'] += softclipped
+        if softclipped > 0:
+            stats['softclipped_reads'] += 1
+    return stats
 
 def collect_alts(vset):
     """

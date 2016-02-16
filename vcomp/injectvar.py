@@ -9,8 +9,9 @@ import util
 import pysam
 import logging
 import random
+import json
 import bam_simulation, callers, comparators, normalizers
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
@@ -204,6 +205,24 @@ def create_variant_sets(vars, ex_snp_info, default_policy, ref_genome):
 
     return sets
 
+def emit_batch_output(results, bamstats, output):
+    """
+    Write output for a batch of input variants (with individual entries for each caller/normalizer/comparator
+      combination) to the given output handle.
+    :param results: Four-level deep dict containing results for [input variant string][caller][normalizer][comparator]
+    :param bamstats: Dictionary containing statistics for bam file
+    :param output: File-like object to which formatted output will be written
+    """
+    for var, vresults in results.iteritems():
+        json.dump({
+            "variant":var,
+            "bamstats": bamstats[var],
+            "results": vresults
+        }, output)
+        output.write("\n")
+
+
+
 def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
     """
     Process the given batch of variants by creating a fake 'genome' with the variants, simulating reads from it,
@@ -224,6 +243,7 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
     os.chdir(tmpdir)
 
     ref_path = conf.get('main', 'ref_genome')
+    bam_stats = defaultdict(dict)
     try:
 
         variant_sets = create_variant_sets(variant_batch, ex_snp, gt_policy, pysam.FastaFile(ref_path))
@@ -237,14 +257,22 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
         reads = bam_simulation.gen_alt_fq(ref_path, variant_sets, read_depth)
         bam = bam_simulation.gen_alt_bam(ref_path, conf, reads)
 
-        var_results = {}
+        var_results = defaultdict(dict)
         variant_callers = callers.get_callers()
         variants = {}
 
+        #Call all variants using each variant caller, store in variants dict
         for caller in variant_callers:
             logging.info("Running variant caller " + caller)
             vars = variant_callers[caller](bam, ref_path, bed, conf)
             variants[caller] = vars
+
+        #Compute bam statistics separately for each region, and store them in a dictionary indexed
+        #by the same key used to store individual varian results
+        for region in util.read_regions(bed):
+            match_vars = util.find_matching_var( pysam.VariantFile(orig_vcf), region)
+            match_var = "/".join([" ".join(str(mvar).split()[0:5]) for mvar in match_vars])
+            bam_stats[match_var] = bam_simulation.gen_bam_stats(bam, region)
 
         remove_tmpdir = not keep_tmpdir
         for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
@@ -265,25 +293,18 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
 
                         result = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, "/".join([str(i) for i in match_vars[0].samples[0]['GT']]), conf)
 
-
                         match_var = "/".join([" ".join(str(mvar).split()[0:5]) for mvar in match_vars])
 
-                        if match_var not in var_results:
-                            var_results[match_var] = {}
                         if caller not in var_results[match_var]:
-                            var_results[match_var][caller] = {}
-                        if normalizer_name not in var_results[match_var][caller]:
-                            var_results[match_var][caller][normalizer_name] = {}
+                            var_results[match_var][caller] = defaultdict(dict)
 
                         var_results[match_var][caller][normalizer_name][comparator_name] = result
 
+
+
         #Iterate over all results and write to standard output. We do this here instead of within the loops above
         #because it keeps results organized by variant, which makes them easier to look at
-        for var, vresults in var_results.iteritems():
-            for caller, cresults in vresults.iteritems():
-                for normalizer_name, compresults in cresults.iteritems():
-                    for comparator_name, result in compresults.iteritems():
-                        output.write(var + ": " + caller + " / " + normalizer_name + " / " + comparator_name + ": " + result + "\n")
+        emit_batch_output(var_results, bam_stats, output)
 
         if not disable_flagging:
             for origvar in var_results.keys():

@@ -10,7 +10,7 @@ vap_fails = []
 all_methods = set()
 all_comp_methods = set()
 
-ResultEntry = namedtuple('ResultEntry', ['variants', 'caller', 'normalizer', 'comparator', 'result'])
+ResultEntry = namedtuple('ResultEntry', ['variants', 'bamstats', 'caller', 'normalizer', 'comparator', 'result'])
 
 def formatted(results, tot, result):
     if tot==0.0:
@@ -71,9 +71,10 @@ def parseline(line):
         return None
 
     variants = toks[0].split("/")
+    bamstats = [float(x) for x in toks[1].split(",")]
     tools = [entry.strip() for entry in toks[1].split("/")]
     result = toks[2].strip()
-    return ResultEntry(variants=variants, caller=tools[0], normalizer=tools[1], comparator=tools[2], result=result)
+    return ResultEntry(variants=variants, bamstats=bamstats, caller=tools[0], normalizer=tools[1], comparator=tools[2], result=result)
 
 #Build big dict with all results, organized by caller and then method and then result type
 
