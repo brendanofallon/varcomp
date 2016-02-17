@@ -10,7 +10,7 @@ def call_variant_fb(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-fb.vcf"
     cmd=[conf.get('main', 'freebayes_path'), "-f", orig_genome_path, "-t", bed, "-b", bam, "-v", vcfoutput]
     subprocess.check_output(cmd)
-    return util.compress_vcf(vcfoutput, conf)
+    return util.sort_vcf(vcfoutput, conf)
 
 def call_variant_fb_minrepeatentropy(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-fb.vcf"
