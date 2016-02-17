@@ -8,6 +8,12 @@ VARIANT = "variant"
 BAMSTATS = "bamstats"
 RESULTS = "results"
 
+VGRAPH = "vgraph"
+HAPPY = "happy"
+VAP_LEFT = "vapleft"
+VCFEVAL = "vcfeval"
+NO_NORM = "nonorm"
+RAW_COMP = "raw"
 
 class Tabelize(object):
     """
@@ -32,9 +38,9 @@ class NormBreakFinder(object):
 
     def __init__(self):
         self.breaks = {}
-        self.comp_method = "vgraph"
-        self.norm_method1 = "vapleft"
-        self.nonorm_method = "nonorm"
+        self.comp_method = VGRAPH
+        self.norm_method1 = VAP_LEFT
+        self.nonorm_method = NO_NORM
 
     def perform_op(self, results):
         for caller in results[RESULTS]:
@@ -57,10 +63,10 @@ class VAPFailsVgraphHits(object):
 
     def __init__(self):
         self.hits = {}
-        self.vgraph = "vgraph"
-        self.vapleft = "vapleft"
-        self.nonorm = "nonorm"
-        self.rawcomp = "raw"
+        self.vgraph = VGRAPH
+        self.vapleft = VAP_LEFT
+        self.nonorm = NO_NORM
+        self.rawcomp = RAW_COMP
 
     def perform_op(self, results):
         var_results = results[RESULTS]
@@ -85,8 +91,8 @@ class CallerSummary(object):
 
     def __init__(self):
         self.summary = {}
-        self.comparator = "vgraph"
-        self.normalizer = "nonorm"
+        self.comparator = VGRAPH
+        self.normalizer = NO_NORM
 
 
     def perform_op(self, results):
@@ -109,13 +115,72 @@ class CallerSummary(object):
                 print "\t{:.5}".format(100.0*float(self.summary[caller][res])/float(tot)),
             print ""
 
+class CallerSummaryBySize(object):
+
+    def __init__(self, breaks=None):
+        self.comparator = VGRAPH
+        self.normalizer = NO_NORM
+        if breaks is None:
+            self.breaks = [10, 25, 50, 1000]
+        self.ins_summary = [{} for _ in range(len(self.breaks))]
+        self.del_summary = [{} for _ in range(len(self.breaks))]
+
+    def _index(self, size):
+        for i, el in enumerate(self.breaks):
+            if size < el:
+                return i
+        return None
+
+    def perform_op(self, results):
+        var_results = results[RESULTS]
+
+        var = results[VARIANT].split("/")[-1]
+        toks = var.split()
+        ref = toks[3]
+        alt = toks[4]
+        idx = self._index( abs( len(ref)-len(alt)))
+        if len(alt) > len(ref):
+            summary = self.ins_summary[idx]
+        else:
+            summary = self.del_summary[idx]
+
+        for caller in var_results:
+            if caller not in summary:
+                summary[caller] = defaultdict(int)
+            cresult = var_results[caller][self.normalizer][self.comparator]
+            summary[caller][cresult] += 1
+
+    def _emit_summary(self, summary):
+        print "caller\t" + "\t".join(injectvar.all_result_types)
+        for caller in summary:
+            tot = 0
+            for result in summary[caller]:
+                tot += summary[caller][result]
+            print caller,
+            for res in injectvar.all_result_types:
+                print "\t{:.5}".format(100.0*float(summary[caller][res])/float(tot)),
+            print ""
+
+    def finalize(self):
+        print "Caller summary:"
+        bstrs = [str(i) + "-" + str(j) for i,j in zip([0] + self.breaks[0:-1], self.breaks)]
+        for i, bstr in enumerate(bstrs):
+            print "\nInsertions, Size range: " + bstr
+            self._emit_summary(self.ins_summary[i])
+
+        for i, bstr in enumerate(bstrs):
+            print "\nDeletions, Size range: " + bstr
+            self._emit_summary(self.del_summary[i])
+
+
+
 class GraphCompMismatches(object):
 
     def __init__(self):
         self.mismatches = {}
-        self.comp1 = "vgraph"
-        self.comp2 = "happy"
-        self.comp3 = "vcfeval"
+        self.comp1 = VGRAPH
+        self.comp2 = HAPPY
+        self.comp3 = VCFEVAL
 
     def perform_op(self, results):
         var_results = results[RESULTS]
@@ -173,10 +238,11 @@ if __name__=="__main__":
         exit(1)
 
     ops = [
+        CallerSummaryBySize()
      #   Tabelize(),
-        NormBreakFinder(),
+        #NormBreakFinder(),
     #    VAPFailsVgraphHits(),
-        CallerSummary(),
-        GraphCompMismatches()
+        #CallerSummary(),
+        #GraphCompMismatches()
     ]
     main(sys.argv[1], ops)
