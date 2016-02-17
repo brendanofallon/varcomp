@@ -146,13 +146,21 @@ def parseline(line):
     return json.loads(line)
 
 def main(path, operations=[]):
+    line_num = 0
     with open(path) as fh:
         for line in fh.readlines():
+            line_num += 1
             if len(line)==0 or line[0] == '#':
                 continue
-            results = parseline(line)
+            try:
+                results = parseline(line)
+            except Exception as ex:
+                sys.stderr.write("Error parsing line #" + str(line_num) + ": " + str(ex))
+                continue
+
             for op in operations:
                 op.perform_op(results)
+
 
     for op in operations:
         print "\n"
@@ -164,5 +172,11 @@ if __name__=="__main__":
         print "Please enter the name of the results file to parse"
         exit(1)
 
-    ops = [Tabelize(), NormBreakFinder(), VAPFailsVgraphHits(), CallerSummary(), GraphCompMismatches()]
+    ops = [
+     #   Tabelize(),
+        NormBreakFinder(),
+    #    VAPFailsVgraphHits(),
+        CallerSummary(),
+        GraphCompMismatches()
+    ]
     main(sys.argv[1], ops)

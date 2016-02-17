@@ -152,6 +152,15 @@ def collect_alts(vset):
                     hap2.append( (var.start, var.ref, alt) )
                     hap1.append( (var.start, var.ref, var.ref) )
                 first = not first
+        elif policy == ALL_HETS:
+            if len(var.alts)==1:
+                hap1.append( (var.start, var.ref, var.alts[0]) )
+                hap2.append( (var.start, var.ref, var.ref) )
+            elif len(var.alts)==2:
+                hap1.append( (var.start, var.ref, var.alts[0]) )
+                hap2.append( (var.start, var.ref, var.alts[1]) )
+            else:
+                raise ValueError('Cant handle triploid / polyploid variants')
         else:
             raise ValueError('Unrecognized phasing policy: ' + policy)
 

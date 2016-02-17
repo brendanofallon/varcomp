@@ -88,9 +88,17 @@ def pysamVar_to_Variant(pvar, default_gt):
         alleles.extend(pvar.alts)
         gt = "/".join([str( alleles.index(g)) for g in gt])
     except:
+
         if default_gt is None:
             raise ValueError('No default GT specified, and variant does not contain GT information: ' + str(pvar))
-        gt = default_gt
+
+        #Special case, if default_gt is "0/1" or "0|1", and there are multiple alts, assume we want
+        #het-alt case
+        if default_gt in ALL_HET_GTS and len(pvar.alts)==2:
+            gt = "1|2"
+        else:
+            gt = default_gt
+
     return Variant(pvar.chrom, pvar.start, pvar.ref, pvar.alts, gt)
 
 

@@ -222,7 +222,6 @@ def emit_batch_output(results, bamstats, output):
         output.write("\n")
 
 
-
 def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
     """
     Process the given batch of variants by creating a fake 'genome' with the variants, simulating reads from it,
