@@ -17,13 +17,14 @@ NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
 NO_MATCH_RESULT="Variants did not match"
 MATCH_WITH_EXTRA_RESULT= "Additional false variants present"
+ERROR_RESULT="Error"
 
 ZYGOSITY_MATCH="Zygosity match"
 ZYGOSITY_EXTRA_ALLELE="Extra allele"
 ZYGOSITY_MISSING_ALLELE="Missing allele"
 ZYGOSITY_MISSING_TWO_ALLELES="Missing two alleles!"
 
-all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, MATCH_WITH_EXTRA_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE)
+all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, MATCH_WITH_EXTRA_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE, ERROR_RESULT)
 
 ExSNPInfo = namedtuple('ExSNPInfo', ['policy', 'dist'])
 
@@ -37,6 +38,13 @@ def result_from_tuple(tup):
     unmatched_orig = tup[0]
     matches = tup[1]
     unmatched_caller = tup[2]
+
+    for v in unmatched_orig:
+        if v is util.ErrorVariant:
+            return ERROR_RESULT
+    for v in unmatched_caller:
+        if v is util.ErrorVariant:
+            return ERROR_RESULT
 
     #ONLY return a match if everything matches perfectly
     if len(unmatched_orig)==0 and len(unmatched_caller)==0 and len(matches)>0:
@@ -144,9 +152,6 @@ def split_results(allresults, bed):
         matches = [v for v in allresults[1] if v[0].chrom==region.chr and v[0].start >= region.start and v[0].start < region.end]
         fps = [v for v in allresults[2] if v.chrom==region.chr and v.start >= region.start and v.start < region.end]
         reg_results.append( (fns, matches, fps) )
-        #Sanity check...
-        if len(fns)+len(matches)==0:
-            raise ValueError('Uh oh, did not find any matching original vars for region!')
 
     return reg_results
 
@@ -354,7 +359,7 @@ def process_vcf(vcf, gt_default, conf, output, snp_info=None, single_batch=False
     else:
         for batchnum, batch in enumerate(util.batch_variants(input_vars, max_batch_size=1000, min_safe_dist=2000)):
             logging.info("Processing batch #" + str(batchnum) + " containing " + str(len(batch)) + " variants")
-            process_batch(batch, vcf.replace(".vcf", "-tmpfiles-") + str(batchnum), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
+            process_batch(batch, vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
 
 
 

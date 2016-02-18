@@ -47,13 +47,21 @@ def gen_snp(ref, chr, location, size):
         alt = random.choice(bases)
     return "\t".join([chr, str(location+1), ".", ref_bases, alt])
 
-def gen_mnp(ref, chr, location, size):
+def gen_ins_mnp(ref, chr, location, size):
     insertion = "".join([random.choice(bases) for _ in range(size)])
     ref_base = ref.fetch(chr, location, location+1)
     alt = random.choice(bases)
     while alt == ref_base:
         alt = random.choice(bases)
     return "\t".join([chr, str(location+1), ".", ref_base, ref_base + insertion + "," + ref_base + alt])
+
+def gen_del_snp_mnp(ref, chr, location, size):
+    ref_bases = ref.fetch(chr, location, location+size+1)
+    del_alt = ref_bases[0]
+    okbases = ['A', 'C', 'T', 'G']
+    okbases.remove(ref_bases[1])
+    alt = ref_bases[0] + random.choice(okbases) + ref_bases[2:]
+    return "\t".join([chr, str(location+1), ".", ref_bases, alt + "," + del_alt ])
 
 def pick_location(regions):
     region = random.choice(regions)
@@ -71,8 +79,8 @@ def generate_all(ref, regions, output):
     for rep in range(0, reps_per_size):
         loc = pick_location(regions)
         for size in range(4, 5, 1):
-            var = gen_deletion(ref, loc[0], loc[1], size)
-            #var = gen_mnp(ref, loc[0], loc[1], size)
+            # var = gen_deletion(ref, loc[0], loc[1], size)
+            var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
             #var = gen_insertion(ref, loc[0], loc[1], size)
             # var = gen_snp(ref, loc[0], loc[1], size)
             # var = gen_duplication(ref, loc[0], loc[1], size)

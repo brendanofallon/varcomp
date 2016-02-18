@@ -84,8 +84,6 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
     if bed is not None:
         bedcmd = " -i " + bed
     vg_cmd = conf.get('main', 'vgraph_path') + " --out1 " + orig_out + " --out2 " + caller_out + " --reference " + conf.get('main', 'ref_genome') + bedcmd + " " + orig_vcf + " " + caller_vcf
-    # cmd = [sys.executable]
-    # cmd.extend(vg_cmd.split())
     ignored = subprocess.check_output(vg_cmd, env=os.environ.copy(), shell=True)
 
     unmatched_orig = []
@@ -100,13 +98,13 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
         if bd == 'X':
             unmatched_orig.append( ovar )
         if bd == 'N':
-            raise ValueError('vgraph error processing variant ' + str(ovar))
+            unmatched_orig.append( util.ErrorVariant(chrom=ovar.chrom, start=ovar.start, msg="vgraph error code N") )
     for cvar in pysam.VariantFile(caller_out):
         bd = cvar.samples[0]['BD']
         if bd == 'X':
             unmatched_caller.append(cvar)
         if bd == 'N':
-            raise ValueError('vgraph error processing variant ' + str(cvar))
+            unmatched_caller.append( util.ErrorVariant(chrom=cvar.chrom, start=cvar.start, msg="vgraph error code N"))
 
     return (unmatched_orig, matches, unmatched_caller)
 
@@ -172,8 +170,8 @@ def get_comparators():
     return {
         "raw": compare_raw,
         "vgraph": compare_vgraph,
-        "vcfeval": compare_vcfeval,
-        "happy": compare_happy
+        #"vcfeval": compare_vcfeval,
+        #"happy": compare_happy
     }
 
 

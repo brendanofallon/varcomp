@@ -18,6 +18,7 @@ ALL_HOMALT_GTS = ["1/1", "1|1"]
 DEFAULT_CONTIG_ORDER=['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3', '4', '5', '6', '7', '8','9', 'MT', 'X','Y']
 
 Variant = namedtuple('Variant', ['chrom', 'start', 'ref', 'alts', 'gt'])
+ErrorVariant = namedtuple('ErrorVariant', ['chrom', 'start', 'msg'])
 
 def var_comp(v1, v2):
     """

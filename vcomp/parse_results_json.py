@@ -156,7 +156,7 @@ class CallerSummaryBySize(object):
             tot = 0
             for result in summary[caller]:
                 tot += summary[caller][result]
-            print caller,
+            print caller + "(" + str(tot) + ")",
             for res in injectvar.all_result_types:
                 print "\t{:.5}".format(100.0*float(summary[caller][res])/float(tot)),
             print ""
@@ -238,11 +238,12 @@ if __name__=="__main__":
         exit(1)
 
     ops = [
-        CallerSummaryBySize()
-     #   Tabelize(),
+
+        Tabelize(),
         #NormBreakFinder(),
     #    VAPFailsVgraphHits(),
-        #CallerSummary(),
-        #GraphCompMismatches()
+        #GraphCompMismatches(),
+        CallerSummary(),
+        CallerSummaryBySize(),
     ]
     main(sys.argv[1], ops)
