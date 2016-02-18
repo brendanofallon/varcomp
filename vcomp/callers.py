@@ -78,9 +78,22 @@ def call_variant_rtg(bam, orig_genome_path, bed, conf=None):
     return vcfoutput
 
 
+def call_variant_mp_bcf(bam, orig_genome_path, bed, conf):
+    pre_output = "mpileup." + util.randstr() + ".vcf"
+    vcfoutput = "output-mp." + util.randstr() + ".vcf"
+    bedarg = ""
+    if bed is not None:
+        bedarg = " -l " + bed
+    cmd = conf.get('main','samtools_path') + ' mpileup ' + ' -f ' + orig_genome_path + " -uv " + " -o " + pre_output + " " + bedarg + " " + bam
+    subprocess.check_call(cmd, shell=True)
+    cmd2 = conf.get('main', 'bcftools_path') + ' call ' + ' -mv ' + ' -o ' + vcfoutput + " " + pre_output
+    subprocess.check_call(cmd2, shell=True)
+    return util.bgz_tabix(vcfoutput, conf)
+
 def get_callers():
     return {
         "freebayes": call_variant_fb,
+        "samtools": call_variant_mp_bcf,
         "platypus": call_variant_platypus,
         #platypus-asm": call_variant_platypus_asm,
         "rtg": call_variant_rtg,

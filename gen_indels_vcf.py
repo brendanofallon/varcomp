@@ -63,7 +63,7 @@ def pick_location(regions):
 
 
 def generate_all(ref, regions, output):
-    reps_per_size = 1000
+    reps_per_size = 100
     repeats = 1
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
@@ -71,9 +71,9 @@ def generate_all(ref, regions, output):
     for rep in range(0, reps_per_size):
         loc = pick_location(regions)
         for size in range(4, 5, 1):
-            #var = gen_deletion(ref, loc[0], loc[1], size)
-            var = gen_mnp(ref, loc[0], loc[1], size)
-            # var = gen_insertion(ref, loc[0], loc[1], size)
+            var = gen_deletion(ref, loc[0], loc[1], size)
+            #var = gen_mnp(ref, loc[0], loc[1], size)
+            #var = gen_insertion(ref, loc[0], loc[1], size)
             # var = gen_snp(ref, loc[0], loc[1], size)
             # var = gen_duplication(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
