@@ -69,7 +69,7 @@ def call_variant_gatk_ug(bam, orig_genome_path, bed, conf=None):
     return util.compress_vcf(vcfoutput, conf)
 
 
-def call_variant_rtg(bam, orig_genome_path, bed, conf=None):
+def call_variant_rtg(bam, orig_genome_path, bed, conf):
     output_dir = "rtg-output-" + str(time.time()).replace(".", "")[-7:]
     vcfoutput = output_dir + "/snps.vcf.gz"
     cmd=["java", "-Djava.io.tmpdir=.", "-jar", conf.get('main', 'rtg_jar'), "snp", "-t", conf.get('main', 'rtg_ref_sdf'), "--bed-regions", bed, "-o", output_dir, bam]
@@ -77,6 +77,20 @@ def call_variant_rtg(bam, orig_genome_path, bed, conf=None):
     #vars = pysam.VariantFile(vcfoutput, "rb")
     return vcfoutput
 
+def call_variant_varscan(bam, orig_genome_path, bed, conf):
+    pre_output = "varscan." + util.randstr() + ".mpileup"
+    vcfoutput = "output-vs." + util.randstr() + ".vcf"
+    bedarg = ""
+    if bed is not None:
+        bedarg = " -l " + bed
+    cmd = conf.get('main','samtools_path') + ' mpileup ' + ' -f ' + orig_genome_path + " -o " + pre_output + " " + bedarg + " " + bam
+    subprocess.check_call(cmd, shell=True)
+    cmd2 = "java -Xmx2g -jar " + conf.get('main', 'varscan_path') + ' mpileup2cns ' + pre_output + ' --variants --output-vcf 1 --output-file ' + vcfoutput
+    print cmd2
+    output = subprocess.check_output(cmd2, shell=True)
+    with open(vcfoutput, "w") as fh:
+        fh.write(output)
+    return util.bgz_tabix(vcfoutput, conf)
 
 def call_variant_mp_bcf(bam, orig_genome_path, bed, conf):
     pre_output = "mpileup." + util.randstr() + ".vcf"
@@ -95,6 +109,7 @@ def get_callers():
         "freebayes": call_variant_fb,
         "samtools": call_variant_mp_bcf,
         "platypus": call_variant_platypus,
+        "varscan": call_variant_varscan,
         #platypus-asm": call_variant_platypus_asm,
         "rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,

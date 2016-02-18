@@ -98,7 +98,7 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
         if bd == 'X':
             unmatched_orig.append( ovar )
         if bd == 'N':
-            unmatched_orig.append( util.ErrorVariant(chrom=ovar.chrom, start=ovar.start, msg="vgraph error code N") )
+            unmatched_orig.append( util.ErrorVariant(chrom=ovar.chrom, start=ovar.start, msg="vgraph error code N"))
     for cvar in pysam.VariantFile(caller_out):
         bd = cvar.samples[0]['BD']
         if bd == 'X':
@@ -170,7 +170,7 @@ def get_comparators():
     return {
         "raw": compare_raw,
         "vgraph": compare_vgraph,
-        #"vcfeval": compare_vcfeval,
+        "vcfeval": compare_vcfeval,
         #"happy": compare_happy
     }
 

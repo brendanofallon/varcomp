@@ -40,10 +40,10 @@ def result_from_tuple(tup):
     unmatched_caller = tup[2]
 
     for v in unmatched_orig:
-        if v is util.ErrorVariant:
+        if type(v) is util.ErrorVariant:
             return ERROR_RESULT
     for v in unmatched_caller:
-        if v is util.ErrorVariant:
+        if type(v) is util.ErrorVariant:
             return ERROR_RESULT
 
     #ONLY return a match if everything matches perfectly
@@ -61,51 +61,6 @@ def result_from_tuple(tup):
 
     return NO_MATCH_RESULT
 
-
-def should_keep_dir(var_res, variant):
-    """
-    Decide whether or not to flag the analysis dir for this variant for non-deletion (usually, we delete all tmp dirs)
-    :param var_res: 3 layer dict of the form [caller][normalizer][comparator] containing results strings
-    :param var: variant
-    :return: Tuple of (boolean, suffix, comment), boolean indicates keep or not, suffix is applied to the tmpdir, comment is written to a file in the dir
-    """
-    #Want to flag following situations:
-    #vgraph / vcfeval / happy disagree on anything
-    #variant match with nonorm, but mismatch with vapleft or vt
-    #variant mismatch with vapleft / raw but correctly matched with vgraph / vcfeval / etc
-
-    keep = False
-    comments = []
-
-    for caller in var_res:
-        for norm in var_res[caller]:
-
-            vgraph_result = var_res[caller][norm]["vgraph"]
-            vcfeval_result = var_res[caller][norm]["vcfeval"]
-            happy_result = var_res[caller][norm]["happy"]
-
-            if vgraph_result != vcfeval_result or vcfeval_result != happy_result:
-                keep = True
-                # comment = "\n".join(["caller: " + caller, "norm:" + norm, "vgraph:" + vgraph_result, "vcfeval:" + vcfeval_result, "happy:"+ happy_result])
-                comments.append("\n".join(["variant: " + str(variant), "caller: " + caller, "norm:" + norm, "vgraph: " + vgraph_result, "vcfeval:" + vcfeval_result, "happy:"+ happy_result]))
-
-            if vcfeval_result == ZYGOSITY_EXTRA_ALLELE or vcfeval_result == ZYGOSITY_MISSING_ALLELE:
-                keep = True
-                comments.append("\n".join(["variant: " + str(variant), "caller: " + caller, "norm:" + norm, "vgraph: " + vgraph_result, "vcfeval:" + vcfeval_result, "happy:"+ happy_result]))
-
-        nonorm_vcfeval_result = var_res[caller]["nonorm"]["vcfeval"]
-        vap_vcfeval_result = var_res[caller]["vapleft"]["vcfeval"]
-        vap_raw_result = var_res[caller]["vapleft"]["raw"]
-
-        if nonorm_vcfeval_result == MATCH_RESULT and vap_vcfeval_result != MATCH_RESULT:
-            keep = True
-            comments.append("\n".join(["variant: " + str(variant), "caller: " + caller, "nonorm / vcfeval:" + nonorm_vcfeval_result, "vapleft / vcfeval:" + vap_vcfeval_result]))
-
-        if vap_raw_result != MATCH_RESULT and nonorm_vcfeval_result == MATCH_RESULT:
-            keep = True
-            comments.append("\n".join(["variant: " + str(variant), "caller: " + caller, "vapleft / raw:" + vap_raw_result, "nonorm / vcfeval:" + nonorm_vcfeval_result]))
-
-    return (keep, comments)
 
 def compare_single_var(result, bedregion, orig_vars, caller_vars, comparator, inputgt, conf):
     """
@@ -248,6 +203,7 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
 
     ref_path = conf.get('main', 'ref_genome')
     bam_stats = defaultdict(dict)
+    remove_tmpdir = not keep_tmpdir
     try:
 
         variant_sets = create_variant_sets(variant_batch, ex_snp, gt_policy, pysam.FastaFile(ref_path))
@@ -278,7 +234,7 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
             match_var = "/".join([" ".join(str(mvar).split()[0:5]) for mvar in match_vars])
             bam_stats[match_var] = bam_simulation.gen_bam_stats(bam, region)
 
-        remove_tmpdir = not keep_tmpdir
+
         for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
             logging.info("Running normalizer " + normalizer_name)
             normed_orig_vcf = normalizer(orig_vcf, conf)
@@ -310,14 +266,6 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
         #because it keeps results organized by variant, which makes them easier to look at
         emit_batch_output(var_results, bam_stats, output)
 
-        if not disable_flagging:
-            for origvar in var_results.keys():
-                keep, comments = should_keep_dir(var_results[origvar], origvar)
-                if keep:
-                    remove_tmpdir = False
-                    with open("flag.info.txt", "a") as fh:
-                        fh.write("\n\n".join(comments) + "\n")
-
     except Exception as ex:
         logging.error("Error processing variant batch " + batchname + " : " + str(ex))
         tb.print_exc(file=sys.stderr)
@@ -332,14 +280,6 @@ def process_batch(variant_batch, batchname, conf, gt_policy, ex_snp=None, output
     os.chdir("..")
     if remove_tmpdir:
         os.system("rm -rf " + tmpdir)
-    else:
-        dirname = os.path.split(batchname)[-1]
-        count = 0
-        while os.path.exists(dirname):
-            count += 1
-            dirname = batchname + "-" + str(count)
-
-        os.system("mv " + tmpdir + " " + dirname)
 
 
 def process_vcf(vcf, gt_default, conf, output, snp_info=None, single_batch=False, keep_tmpdir=False, disable_flagging=False, read_depth=250):
