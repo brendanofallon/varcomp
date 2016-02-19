@@ -352,12 +352,13 @@ def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
     #return batches
     files = []
     for i, batch in enumerate(batches):
-        with open('{0}.batch{1}.vcf'.format(name, i), 'w') as out:
+        batchname = '{0}.batch{1}.'.format(name, i) + randstr() + ".vcf"
+        with open(batchname, 'w') as out:
             for x in header:
                 out.write(x)
             for x in batch:
                 out.write(str(x))
-        files.append('{0}.batch{1}.vcf'.format(name, i))
+        files.append(batchname)
     return files
 
 
