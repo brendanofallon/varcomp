@@ -305,31 +305,33 @@ def canadd(var, batch, max_batch_size, min_safe_dist=2000):
             return False
     return True
 
-def batch_variants(vars, max_batch_size=1000, min_safe_dist=2000):
+def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
     """
     Given a list of variants, group them into batches such that no batch contains two variants
     whose start positions are within min_safe_dist bases of each other
-    :param vars: List of variants
+    :param vcf: VCF file containing variants to batch
     :param max_batch_size: Maximum number of variants per batch
     :param min_safe_dist: Min permissible distance between two variants in batch
-    :return: List of batches containing variants
+    :return: List of VCF files containing subsets of variants
     """
 
     batches = []
     #vars = list(vars)
     header = []
-    if vars.endswith('.gz'):
-        for x in gzip.open(vars):
+    if vcf.endswith('.gz'):
+        for x in gzip.open(vcf):
             if x.startswith('#'):
                 header.append(x)
-            else: break
+            else:
+                break
     else:
-        for x in open(vars):
+        for x in open(vcf):
             if x.startswith('#'):
                 header.append(x)
-            else: break
-    name = vars.split('/')[-1].strip('.gz').strip('.vcf')
-    vars = list(pysam.VariantFile(vars))
+            else:
+                break
+    name = vcf.split('/')[-1].strip('.gz').strip('.vcf')
+    vars = list(pysam.VariantFile(vcf))
 
     while len(vars)>0:
         var = vars.pop(0)

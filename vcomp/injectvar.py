@@ -183,7 +183,7 @@ def emit_batch_output(results, bamstats, output):
         output.write("\n")
 
 
-def process_batch(vcf, batchname, conf, gt_policy, ex_snp=None, output=sys.stdout, keep_tmpdir=False, disable_flagging=False, read_depth=250):
+def process_batch(vcf, batchname, conf, gt_policy, ex_snp=None, output=sys.stdout, keep_tmpdir=False, read_depth=250):
     """
     Process the given batch of variants by creating a fake 'genome' with the variants, simulating reads from it,
      aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
@@ -284,7 +284,7 @@ def process_batch(vcf, batchname, conf, gt_policy, ex_snp=None, output=sys.stdou
         os.system("rm -rf " + tmpdir)
 
 
-def process_vcf(vcf, gt_default, conf, output, snp_info=None, single_batch=False, keep_tmpdir=False, disable_flagging=False, read_depth=250):
+def process_vcf(vcf, gt_default, conf, output, snp_info=None, single_batch=False, keep_tmpdir=False, read_depth=250):
     """
     Perform analyses for each variant in the VCF file.
     :param input_vcf:
@@ -297,13 +297,13 @@ def process_vcf(vcf, gt_default, conf, output, snp_info=None, single_batch=False
     logging.info("Processing variants in file " + vcf)
     if single_batch:
         logging.info("Processing all variants as one batch")
-        process_batch(vcf, vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
+        process_batch(vcf, vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth)
     else:
-        batches = enumerate(util.batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000))
-        for batchnum, batch in enumerate(batches):
-            logging.info("Processing batch #" + str(batchnum) + " containing " + str(len(batch)) + " variants")
-            process_batch(batch, vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth, disable_flagging=disable_flagging)
-            os.remove(batch)
+        batches = util.batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000)
+        for batchnum, batch_vcf in enumerate(batches):
+            logging.info("Processing batch #" + str(batchnum+1) + " of " + str(len(batches)))
+            process_batch(batch_vcf, vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, output=output, keep_tmpdir=keep_tmpdir, read_depth=read_depth)
+            os.remove(batch_vcf)
 
 
 
@@ -320,7 +320,6 @@ if __name__=="__main__":
     parser.add_argument("-s", "--seed", help="Random seed", default=None)
     parser.add_argument("-o", "--output", help="Output destination", default=sys.stdout)
     parser.add_argument("-r", "--readdepth", help="Number of reads to generate per variant", default=250, type=int)
-    parser.add_argument("-d", "--dontflag", help="Disable temp dir flagging", action='store_true')
     parser.add_argument("-a", "--addsnp", help="Add a SNP upstream of each variant", action='store_true')
     parser.add_argument("-t", "--trans", help="If SNP is added, add it in trans (default cis)", action='store_true')
     parser.add_argument("--snphom", help="Added SNPs are homozygous (default het)", action='store_true')
@@ -358,7 +357,7 @@ if __name__=="__main__":
 
 
     for vcf in args.vcf:
-        process_vcf(vcf, gt_default, conf, args.output, snp_info=snp_inf, single_batch=args.batch, keep_tmpdir=args.keep, read_depth=args.readdepth, disable_flagging=args.dontflag)
+        process_vcf(vcf, gt_default, conf, args.output, snp_info=snp_inf, single_batch=args.batch, keep_tmpdir=args.keep, read_depth=args.readdepth)
 
     try:
         args.output.close()
