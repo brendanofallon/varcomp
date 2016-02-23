@@ -105,9 +105,12 @@ def gen_bam_stats(bamfile, region=None):
         if read.mapping_quality > 40:
             stats['mq40'] += 1
         softclipped = 0
-        for item in read.cigartuples:
-            if item[0] == 4:
-                softclipped += item[1]
+        try:
+            for item in read.cigartuples:
+                if item[0] == 4:
+                    softclipped += item[1]
+        except:
+            pass
         stats['softclipped_bases'] += softclipped
         if softclipped > 0:
             stats['softclipped_reads'] += 1
