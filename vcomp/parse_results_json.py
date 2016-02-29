@@ -3,8 +3,12 @@ import json
 import injectvar
 import sys
 from collections import defaultdict
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import itertools
 
 VARIANT = "variant"
+QUALS="caller_quals"
 BAMSTATS = "bamstats"
 RESULTS = "results"
 
@@ -15,17 +19,47 @@ VCFEVAL = "vcfeval"
 NO_NORM = "nonorm"
 RAW_COMP = "raw"
 
+LABEL_SUBS = {
+    injectvar.NO_VARS_FOUND_RESULT: "Ref. call",
+    injectvar.ZYGOSITY_MISSING_ALLELE: "Zygosity error",
+    injectvar.NO_MATCH_RESULT: "Other mismatch",
+    injectvar.MATCH_RESULT: "Match",
+}
+
 class Tabelize(object):
     """
     Writes tab-delimited results in table form to sys.stdout
     """
+    def __init__(self):
+        self.first = True
 
     def perform_op(self, results):
+        if self.first:
+            print "\t".join(["#variant", "quality", "totalreads", "properpairs", "mq20", "mq40", "softclipped_reads", "softclipped_bases", "caller", "normalizer", "comparator", "result"])
+            self.first = False
         var = results[VARIANT]
-        for caller,caller_results in results[RESULTS].iteritems():
+        for caller, caller_results in results[RESULTS].iteritems():
+            qual = results[QUALS][caller]
             for normalizer, norm_results in caller_results.iteritems():
                 for comparator, comp_results in norm_results.iteritems():
-                    print "\t".join([var, caller, normalizer, comparator, comp_results])
+                    totreads = results[BAMSTATS]['total_reads']
+                    pp = results[BAMSTATS]['properpair']
+                    if 'mq20' in results[BAMSTATS]:
+                        mq20 = results[BAMSTATS]['mq20']
+                    else:
+                        mq20 = 0
+                    if 'mq40' in results[BAMSTATS]:
+                        mq40 = results[BAMSTATS]['mq40']
+                    else:
+                        mq40 = 0
+                    if 'softclipped_reads' in results[BAMSTATS]:
+                        screads = results[BAMSTATS]['softclipped_reads']
+                    else:
+                        screads = 0
+
+                    scbases = results[BAMSTATS]['softclipped_bases']
+
+                    print "\t".join([var, str(qual), str(totreads), str(pp), str(mq20), str(mq40), str(screads), str(scbases), caller, normalizer, comparator, comp_results])
 
     def finalize(self):
         pass
@@ -115,6 +149,9 @@ class CallerSummary(object):
                 print "\t{:.5}".format(100.0*float(self.summary[caller][res])/float(tot)),
             print ""
 
+        # plot_callers( ([self.summary], ), ["Overall"])
+        plot_results(self.summary)
+
 class CallerSummaryBySize(object):
 
     def __init__(self, breaks=None):
@@ -122,6 +159,8 @@ class CallerSummaryBySize(object):
         self.normalizer = NO_NORM
         if breaks is None:
             self.breaks = [10, 25, 50, 1000]
+        else:
+            self.breaks = breaks
         self.ins_summary = [{} for _ in range(len(self.breaks))]
         self.del_summary = [{} for _ in range(len(self.breaks))]
 
@@ -138,7 +177,13 @@ class CallerSummaryBySize(object):
         toks = var.split()
         ref = toks[3]
         alt = toks[4]
-        idx = self._index( abs( len(ref)-len(alt)))
+        if len(ref) == len(alt):
+            idx = self._index(len(ref))
+        else:
+            idx = self._index( abs( len(ref)-len(alt)))
+        if idx is None:
+            return
+
         if len(alt) > len(ref):
             summary = self.ins_summary[idx]
         else:
@@ -172,6 +217,15 @@ class CallerSummaryBySize(object):
             print "\nDeletions, Size range: " + bstr
             self._emit_summary(self.del_summary[i])
 
+        #plot_callers( (self.ins_summary, self.del_summary), bstrs)
+        # if len(self.ins_summary)>0:
+        #      plot_callers_line(self.ins_summary, [str(x) for x in self.breaks + [str(self.breaks[-1]) + "+" ]])
+        # else:
+
+        plot_callers_line(self.del_summary, [str(x) for x in self.breaks + [str(self.breaks[-1]) + "+" ]])
+
+
+
 
 
 class GraphCompMismatches(object):
@@ -200,6 +254,126 @@ class GraphCompMismatches(object):
         else:
             for k,v in self.mismatches.iteritems():
                 print k + "\t" + v
+
+
+def plot_results(data):
+    fig = plt.figure()
+    fig.patch.set_facecolor('white')
+    xmod = 0.5
+    xlocs = []
+    labels = []
+    ax = plt.subplot(111)
+    ax.yaxis.grid(True)
+    vals = {}
+    results = [injectvar.MATCH_RESULT, injectvar.NO_MATCH_RESULT,injectvar.ZYGOSITY_MISSING_ALLELE, injectvar.NO_VARS_FOUND_RESULT]
+
+    prev = None
+    colors = ('green', 'yellow', 'orange', 'red',)
+    ymax = 0
+    for j, res in enumerate(results):
+        v = []
+        labels = []
+        for i, caller in enumerate(data):
+            v.append(data[caller][res])
+            labels.append(caller)
+        vals[caller] = v
+
+        label = res
+        if label in LABEL_SUBS:
+            label = LABEL_SUBS[res]
+
+        vmax = max(v) if len(v)>0 else 0
+        if vmax > ymax:
+            ymax = vmax
+        ax.bar(range(len(v)), v, width=0.5, bottom=prev, color=colors[j], label=label)
+        if prev is None:
+            prev = v
+        else:
+            prev = [a+b for a,b in zip(prev, v)]
+
+    ax.set_ylim([0,ymax])
+    ax.set_xticklabels(labels, rotation=45, horizontalalignment='center')
+     # ax.set_xticks([x+0.3 for x in xlocs])
+    ax.legend(loc='lower right')
+    plt.show()
+
+def plot_callers_line(data, titles):
+    fig = plt.figure()
+    fig.patch.set_facecolor('white')
+    cmap = cm.get_cmap('CMRmap')
+    markers = ['.', 'o', 'v', '+', 's', '*', '>', 'x', 'D', '<', '^']
+    target_result = injectvar.MATCH_RESULT
+
+
+    #Need to accumulate a single list of accuracies for a given caller across sizes
+    accuracies = defaultdict(list)
+    for i, res_set in enumerate(data):
+        for caller in res_set:
+            tot = sum(res_set[caller].values())
+            accuracies[caller].append(float(res_set[caller][target_result]) / float(tot))
+
+    ax = plt.subplot(111)
+    c = 0.0
+    xlocs = range(len(titles))
+    for caller, vals in accuracies.iteritems():
+        plt.plot(xlocs[0:len(vals)], vals, linewidth=2.0, color=cmap(c/float(len(accuracies))), marker=markers[int(c%len(markers))], label=caller)
+        c += 1
+
+
+    ax.legend(loc='lower right')
+    ax.set_xticks(range(len(titles)))
+    ax.set_xticklabels(titles)
+    ax.set_ylabel("Accuracy (matches / total assessments)")
+    ax.set_xlabel("Size")
+    plt.show()
+
+
+
+def plot_callers(data, titles):
+    fig = plt.figure()
+    fig.patch.set_facecolor('white')
+    rows = len(data)
+    cols = len(data[0])
+    xmod = 0.5
+    ymax = 0
+    results = [injectvar.MATCH_RESULT, injectvar.NO_MATCH_RESULT,injectvar.ZYGOSITY_MISSING_ALLELE, injectvar.NO_VARS_FOUND_RESULT]
+    for c, ins in enumerate( itertools.chain(*data)):
+        labels = []
+        ax = plt.subplot(rows, cols, c+1)
+        prev = None
+        colors = ('green', 'yellow', 'orange', 'red',)
+        for j, res in enumerate(results):
+            v = []
+            labels = []
+            for i, caller in enumerate(ins):
+                v.append(ins[caller][res])
+                labels.append(caller)
+
+            label = res
+            if label in LABEL_SUBS:
+                label = LABEL_SUBS[res]
+            vmax = max(v) if len(v)>0 else 0
+            if vmax > ymax:
+                ymax = vmax
+            ax.bar(range(len(v)), v, width=0.5, bottom=prev, color=colors[j], label=label)
+            if prev is None:
+                prev = v
+            else:
+                prev = [a+b for a,b in zip(prev, v)]
+
+        ax.set_ylim([0,ymax])
+        ax.yaxis.grid(True)
+        # bars = ax.bar(xlocs, vals, 0.8)
+        ax.set_xticklabels(labels, size='small', rotation=45, horizontalalignment='center')
+        # ax.set_xticks([x+0.3 for x in xlocs])
+        # for bar in bars:
+        #     ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(), str(int(bar.get_height())), ha='center', va='bottom', size='small')
+
+        ax.set_title(titles[c % cols])
+
+    plt.subplots_adjust(hspace=0.3)
+    plt.show()
+
 
 
 def parseline(line):
@@ -243,7 +417,7 @@ if __name__=="__main__":
         #NormBreakFinder(),
     #    VAPFailsVgraphHits(),
         #GraphCompMismatches(),
-        CallerSummary(),
-        CallerSummaryBySize(),
+        #CallerSummary(),
+        #CallerSummaryBySize(range(1, 120, 5)),
     ]
     main(sys.argv[1], ops)

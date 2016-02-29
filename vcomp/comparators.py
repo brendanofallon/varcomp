@@ -93,14 +93,16 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
     for ovar in pysam.VariantFile(orig_out):
         bd = ovar.samples[0]['BD']
         bk = ovar.samples[0]['BK']
-        if bd == '=':
-            matches.append( (ovar, ovar) )
+
         if bd == 'X':
-            unmatched_orig.append( ovar )
+            unmatched_orig.append(ovar)
         if bd == 'N':
-            unmatched_orig.append( util.ErrorVariant(chrom=ovar.chrom, start=ovar.start, msg="vgraph error code N"))
+            unmatched_orig.append(util.ErrorVariant(chrom=ovar.chrom, start=ovar.start, msg="vgraph error code N"))
+
     for cvar in pysam.VariantFile(caller_out):
         bd = cvar.samples[0]['BD']
+        if bd == '=':
+            matches.append((cvar, cvar))
         if bd == 'X':
             unmatched_caller.append(cvar)
         if bd == 'N':
@@ -122,7 +124,7 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
     if bed is not None:
         cmd = cmd + " --bed-regions " + bed
     subprocess.check_output(cmd, shell=True, executable="/bin/bash")
-    orig_vars = read_all_vars(orig_vcf, bed)
+    # orig_vars = read_all_vars(orig_vcf, bed)
     tp_vars = read_all_vars(output_dir + "/tp.vcf.gz")
     fp_vars = read_all_vars(output_dir + "/fp.vcf.gz")
     fn_vars = read_all_vars(output_dir + "/fn.vcf.gz")
@@ -171,7 +173,7 @@ def get_comparators():
         "raw": compare_raw,
         "vgraph": compare_vgraph,
         "vcfeval": compare_vcfeval,
-        #"happy": compare_happy
+        "happy": compare_happy
     }
 
 

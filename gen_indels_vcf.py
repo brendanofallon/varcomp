@@ -47,6 +47,25 @@ def gen_snp(ref, chr, location, size):
         alt = random.choice(bases)
     return "\t".join([chr, str(location+1), ".", ref_bases, alt])
 
+
+def gen_blocksub(ref, chr, location, size):
+    """
+    Length-preserving variant
+    :param ref:
+    :param chr:
+    :param location:
+    :param size:
+    :return:
+    """
+    ref_bases = ref.fetch(chr, location, location+size+1)
+    alt = ""
+    for b in ref_bases:
+        a = random.choice(bases)
+        while a==b:
+            a = random.choice(bases)
+        alt = alt + a
+    return "\t".join([chr, str(location+1), ".", ref_bases, alt])
+
 def gen_ins_mnp(ref, chr, location, size):
     insertion = "".join([random.choice(bases) for _ in range(size)])
     ref_base = ref.fetch(chr, location, location+1)
@@ -71,19 +90,20 @@ def pick_location(regions):
 
 
 def generate_all(ref, regions, output):
-    reps_per_size = 100
+    reps_per_size = 200
     repeats = 1
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
         loc = pick_location(regions)
-        for size in range(4, 5, 1):
-            # var = gen_deletion(ref, loc[0], loc[1], size)
-            var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
+        for size in range(15, 21, 10):
+            #var = gen_deletion(ref, loc[0], loc[1], size)
+            #var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
             #var = gen_insertion(ref, loc[0], loc[1], size)
             # var = gen_snp(ref, loc[0], loc[1], size)
-            # var = gen_duplication(ref, loc[0], loc[1], size)
+            var = gen_duplication(ref, loc[0], loc[1], size)
+            #var = gen_blocksub(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
             for _ in range(repeats):
                 output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")

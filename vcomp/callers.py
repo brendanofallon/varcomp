@@ -86,7 +86,6 @@ def call_variant_varscan(bam, orig_genome_path, bed, conf):
     cmd = conf.get('main','samtools_path') + ' mpileup ' + ' -f ' + orig_genome_path + " -o " + pre_output + " " + bedarg + " " + bam
     subprocess.check_call(cmd, shell=True)
     cmd2 = "java -Xmx2g -jar " + conf.get('main', 'varscan_path') + ' mpileup2cns ' + pre_output + ' --variants --output-vcf 1 --output-file ' + vcfoutput
-    print cmd2
     output = subprocess.check_output(cmd2, shell=True)
     with open(vcfoutput, "w") as fh:
         fh.write(output)

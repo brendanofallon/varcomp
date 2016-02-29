@@ -19,6 +19,8 @@ NO_MATCH_RESULT="Variants did not match"
 MATCH_WITH_EXTRA_RESULT= "Additional false variants present"
 ERROR_RESULT="Error"
 
+MISSING_QUAL = -1
+
 ZYGOSITY_MATCH="Zygosity match"
 ZYGOSITY_EXTRA_ALLELE="Extra allele"
 ZYGOSITY_MISSING_ALLELE="Missing allele"
@@ -27,6 +29,21 @@ ZYGOSITY_MISSING_TWO_ALLELES="Missing two alleles!"
 all_result_types = (MATCH_RESULT, NO_MATCH_RESULT, NO_VARS_FOUND_RESULT, MATCH_WITH_EXTRA_RESULT, ZYGOSITY_MISSING_ALLELE, ZYGOSITY_EXTRA_ALLELE, ERROR_RESULT)
 
 ExSNPInfo = namedtuple('ExSNPInfo', ['policy', 'dist'])
+
+
+def find_qual(vars):
+    qual = MISSING_QUAL
+    if vars is None or len(vars)==0:
+        return qual
+
+    var = vars[0]
+    if var.qual is None:
+        if 'GQ' in var.samples[0]:
+            qual = var.samples[0]['GQ']
+    else:
+        qual = var.qual
+
+    return qual
 
 def result_from_tuple(tup):
     """
@@ -166,7 +183,7 @@ def create_variant_sets(vars, ex_snp_info, default_policy, ref_genome):
     return sets
 
 
-def emit_batch_output(results, bamstats, output):
+def emit_batch_output(results, quals, bamstats, output):
     """
     Write output for a batch of input variants (with individual entries for each caller/normalizer/comparator
       combination) to the given output handle.
@@ -177,6 +194,7 @@ def emit_batch_output(results, bamstats, output):
     for var, vresults in results.iteritems():
         json.dump({
             "variant":var,
+            "caller_quals": quals[var],
             "bamstats": bamstats[var],
             "results": vresults
         }, output)
@@ -222,6 +240,8 @@ def process_batch(vcf, batchname, conf, gt_policy, ex_snp=None, output=sys.stdou
         var_results = defaultdict(dict)
         variant_callers = callers.get_callers()
         variants = {}
+        var_quals = defaultdict(dict)
+
 
         #Call all variants using each variant caller, store in variants dict
         for caller in variant_callers:
@@ -235,6 +255,9 @@ def process_batch(vcf, batchname, conf, gt_policy, ex_snp=None, output=sys.stdou
             match_vars = util.find_matching_var( pysam.VariantFile(orig_vcf), region)
             match_var = "/".join([" ".join(str(mvar).split()[0:5]) for mvar in match_vars])
             bam_stats[match_var] = bam_simulation.gen_bam_stats(bam, region)
+            for caller in variant_callers:
+                cvar = util.find_matching_var(pysam.VariantFile(variants[caller]), region)
+                var_quals[match_var][caller] = find_qual(cvar)
 
 
         for normalizer_name, normalizer in normalizers.get_normalizers().iteritems():
@@ -262,11 +285,9 @@ def process_batch(vcf, batchname, conf, gt_policy, ex_snp=None, output=sys.stdou
 
                         var_results[match_var][caller][normalizer_name][comparator_name] = result
 
-
-
         #Iterate over all results and write to standard output. We do this here instead of within the loops above
         #because it keeps results organized by variant, which makes them easier to look at
-        emit_batch_output(var_results, bam_stats, output)
+        emit_batch_output(var_results, var_quals, bam_stats, output)
 
     except Exception as ex:
         logging.error("Error processing variant batch " + batchname + " : " + str(ex))
