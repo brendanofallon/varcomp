@@ -1,24 +1,72 @@
 # varcomp
 Tools for calling and comparing variants from simulated read sets. The primary function is to take a list of variants (in VCF format), simulate fastq reads from them, align those reads to a reference, and then run multiple variant callers, normalization tools, and comparison tools to see which callers produced results that matched the input. 
 
-This tool consists of two main modules. The first, `vcomp/injectvar.py` processes an input VCF of variants and writes results to standard output (you'll probably want to redirect it to a file). The second, `vcomp/parse_injectvar_output.py` parses the results file and emits aggregated results. Typical usage looks something like:
+##Read simulation
+
+Varcomp has the ability to take an input VCF file, insert the variants into a modified reference genome, and simulate fastq-formatted reads from the new genome. This is useful for generating static read sets that can  be shared, run through multiple different pipelines, etc. Basic usage looks like:
+
+    python vcomp/injectvar.py -v my_variants.vcf --generate-fqs --het 
+
+This creates several output files:
+
+    my_variants_final.vcf.gz
+    my_variants_R1.fastq
+    my_variants_R2.fastq
+    
+The first file contains the set of 'final' variants, which may not be identical to the input variants (for instance, if a zygosity argument like --het or --hom was supplied, or additional snps added via the --addsnp command). The other two files contain the first and second paired-end reads.
+
+Due to a current limitation with the simulation procedure, the minimum distance between any two variants in the input VCF cannot be less than 2kb. Otherwise, nearby variants might interfere in an unpredictable manner. 
+
+##Variant caller benchmarking
+
+Varcomp can also take an input variant list, simulate reads (or use existing simulated fastqs), and run several variant callers, and compare the results to the input set of variants to see which caller had the higher accuracy. Basic usage looks like:
 
     python vcomp/injectvar.py -v my_variants.vcf > my_output.txt
-  
-Each line in `my_output.txt` is the result for a single caller / normalizer / comparator combo. The format should be pretty self-explanatory, although the list of all possible result types is steadily changing. 
+    
+If you've already created an input set of fastqs, you can use them by: 
 
- To process the output to produce some aggregated results, do something like:
- 
-     python vcomp/parse_injectvar_output.py my_output.txt
-     
- Various aggregate statistics will be written to standard output. Exactly what is computed is in flux and is likely to remain so for some time. 
+    python vcomp/injectvar.py -v my_variants.vcf --fqs my_variants_R1.fastq --fqs my_variants_R2.fastq > my_output.txt
+    
+###Modifying input variants
+
+Given an input VCF, varcomp can perform several modifications of the variants prior to simulating reads. In particular, zygosities can be forced to het or hom, and extra SNPs can be added upstream of each input variant, either in cis or trans. 
+
+    --het        Force all input variants to be heterozygous
+    --hom        Force all input variants to be homozygous
+    --addsnp     Add upstream a single SNP upstream of each input variant (default, variants added in cis)
+    --addsnp --trans Add upstream SNP in trans
+   
+One of --het or --hom is *required* if the input VCF does not contain a GT format entry for each variant.
+
+
+##Configuration
  
  varcomp makes extensive use of multiple external applications (callers, normalizers, aligners, comparison tools, etc). The paths to these applications must be defined in a standard python configuration file. By default, `injectvar.py` looks for a file called `comp.conf` in the active directory, but you can specify a path to it by using the `-c /path/to/configuration/file` argument. The format of the file is pretty straightforward, just a list of key=value pairs where the values are the paths to various executables. 
  
-# Under the hood
+ TODO: Exactly what is required  in a minimal configuration file, samtools, tabix, and bgzip? 
  
- While the module `injectvar` contains basic processing structure, the callers, normalizers, and comparators are defined in the `callers.py`, `normalizers.py` and `comparators.py` modules. Each caller / normalizer / comparator is simply a python callable, and these are stored in a dict that associates each callable with a name. In each module, there's a function called something like `get_callers()` that returns this dictionary. There's no command line argument control over callers or anything - so adjustments to the callers / normalizers / etc. must be done by commenting out lines within the `get_callers()` etc functions. 
- 
-# Temporary and flagged dirs
+##Adding new callers, normalizers, etc
 
- For each variant, `injectvar` creates a temporary working directory and keeps all of the VCFs, BAMs, etc in there. These are named something like `tmp-working129873` (the numbers may change). These are usually deleted when the variant is done being processed, but in some cases it's nice to leave them there for closer investigation. For instance, if vgraph / vcfeval / hap.py disagree, we want to know exactly what happened and be able to examine each VCF. To facilitate this, certain types of results can trigger a temporary directory to be 'flagged' and preserved. In this case, the name of the temporary directory is changed to something like `tmpdir-chr10-128376-comp-conflict` and a text file called `flag.info.txt` is created in the directory that summarizes what happened. (This also happens for errors, but in this case the file is called `exception.info.txt`.)
+Adding new callers, normalization tools, or comparators is easy and doesn't require a rebuild. To add a new caller, simply create a new python file containing a function that that executes the caller on a given BAM file and returns the VCF. That file also must define a function called `get_callers` that returns a dict mapping a unique string to the caller's function. Here's a quick example:
+
+    import vcomp.util 
+    
+    def call_variant_freebayes(bam, ref_fasta, bed, conf):
+        vcfoutput = "output-fb.vcf"
+        cmd=["/path/to/freebayes", "-f", ref_fasta, "-t", bed, "-b", bam, "-v", vcfoutput]
+        subprocess.check_output(cmd)
+        return util.sort_vcf(vcfoutput, conf)
+    
+    def get_callers():
+        return { "freebayes": call_variant_freebayes }
+
+The new function (`call_variant_freebayes` in the example above) should have the same signature as in the example. the `bam`, `ref_fasta` and `bed` args are paths to those objects on the filesystem. The `conf` argument is an instance of a standard python ConfigParser[https://docs.python.org/2/library/configparser.html] that contains information about the current configuration file. 
+Lastly, add a line to the main configuration file under the 'callers' section stating where to find your Python file, like so:
+
+    [callers]
+    fb_caller=/path/to/freebayes_caller.py
+
+ That should be it. By default a typical `varcomp` run will find and execute your newly added caller.  
+
+
+
