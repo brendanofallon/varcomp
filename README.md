@@ -60,13 +60,21 @@ Adding new callers, normalization tools, or comparators is easy and doesn't requ
     def get_callers():
         return { "freebayes": call_variant_freebayes }
 
-The new function (`call_variant_freebayes` in the example above) should have the same signature as in the example. the `bam`, `ref_fasta` and `bed` args are paths to those objects on the filesystem. The `conf` argument is an instance of a standard python ConfigParser[https://docs.python.org/2/library/configparser.html] that contains information about the current configuration file. 
+The new function (`call_variant_freebayes` in the example above) should have the same signature as in the example. the `bam`, `ref_fasta` and `bed` args are paths to those objects on the filesystem. The `conf` argument is an instance of a standard python [ConfigParser](https://docs.python.org/2/library/configparser.html) that contains information about the current configuration file. 
 Lastly, add a line to the main configuration file under the 'callers' section stating where to find your Python file, like so:
 
     [callers]
     fb_caller=/path/to/freebayes_caller.py
 
  That should be it. By default a typical `varcomp` run will find and execute your newly added caller.  
+ 
+ ##Controlling callers
+ 
+ By default varcomp will execute every caller it finds. If you'd like to run some subset of the callers, use the --callers argument, like so:
+ 
+     python vcomp/injectvar.py -v my_vars.vcf --callers freebayes
+     
+
 
 
 
