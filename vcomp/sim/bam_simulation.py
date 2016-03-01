@@ -1,17 +1,16 @@
 import os
 import subprocess
-import util
-import pysam
-import read_simulator as rs
 from collections import defaultdict
+
+import pysam
+
+import read_simulator as rs
+import vcomp.util
 
 ALL_HETS="all hets"
 CIS = "cis"
 TRANS = "trans"
 ALL_HOMS="all homs"
-# USE_GT="use gt"
-# EACH_ALT="each alt"
-
 
 def gen_alt_genome(chrom, pvars, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
     """
@@ -55,7 +54,7 @@ def generate_reads(alt_genome_path, chr, pos, read_count=250, prefix="test-reads
     :param alt_genome_path:
     :param read_count: Total number of read pairs to generate
     :param prefix: filename prefix for output files
-    :return:
+    :return: Paths to two fastq files containing reads
     """
     generator = rs.ReadSimulator(alt_genome_path, chr, pos)
     r1_filename = prefix + "_R1.fastq"
@@ -119,11 +118,11 @@ def gen_bam_stats(bamfile, region=None):
 def collect_alts(vset):
     """
     Given a list of variants and a 'policy' describing how to arrange them, construct two haplotypes representing
-    phased versions of the variants. Each 'haplotype' is a list of a start position, reference allele, and single alt allele,
-    (these lists are then used to construct a fasta genome from which we can simulate reads).
+    phased versions of the variants. Each 'haplotype' is a list of a start position, reference allele, and a
+    single alt allele (these lists are then used to construct a fasta genome from which we can simulate reads).
     Note that CIS and TRANS are not very well defined if there are multi-alt variants in the vars
     :param vset:
-    :return:
+    :return: Tuple of two 'haplotypes'
     """
     hap1 = []
     hap2 = []
@@ -169,28 +168,47 @@ def collect_alts(vset):
 
     return hap1, hap2
 
-def gen_alt_fq(ref_path, variant_sets, depth):
-    reads1 = "input_r1.fq"
-    reads2 = "input_r2.fq"
+def gen_alt_fq(ref_path, variant_sets, read_count, dest_prefix="input"):
+    """
+    Generate a batch of simulated reads independently for the variants in each variant_set
+    Each set contains a list of variants and a policy describing cis / trans configuration
+    :param ref_path: Path to reference fasta
+    :param variant_sets: List of sets of variants to inject into reference
+    :param read_count:
+    :return:
+    """
+    reads1 = dest_prefix + "_r1.fq"
+    reads2 = dest_prefix + "_r2.fq"
     read1_fh = open(reads1, "w")
     read2_fh = open(reads2, "w")
     for vset in variant_sets:
         chrom = vset['vars'][0].chrom
         hap1, hap2 = collect_alts(vset)
 
-        alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
+        alt_genome_path = 'alt_genome' + vcomp.util.randstr() + '.fa'
         alt_genome_size = gen_alt_genome(chrom, hap1, ref_path, alt_genome_path, overwrite=True)
-        generate_reads(alt_genome_path, chrom, alt_genome_size/2, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
+        generate_reads(alt_genome_path, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
+        os.read(alt_genome_path)
 
-        alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
+        alt_genome_path = 'alt_genome' + vcomp.util.randstr() + '.fa'
         alt_genome_size = gen_alt_genome(chrom, hap2, ref_path, alt_genome_path, overwrite=True)
-        generate_reads(alt_genome_path, chrom, alt_genome_size/2, read_count=depth/2, read1_fh=read1_fh, read2_fh=read2_fh)
+        generate_reads(alt_genome_path, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
+        os.read(alt_genome_path)
 
     read1_fh.close()
     read2_fh.close()
     return (reads1, reads2)
 
 def gen_alt_bam(ref_path, conf, reads):
+    """
+    Align reads to reference, sort them, and generate an indexed .bam file. This assumes
+    BWA, but we should allow this to be defined in a configuration.
+    :param ref_path: Path to reference genome
+    :param conf: Configuration containing paths to BWA, samtools, etc
+    :param reads: Paths to reads to align (assumes paired-end)
+    :return: Path to bam file
+    """
+    #TODO: Allow different alignment tools
     reads1, reads2 = reads
     bam = create_bam(ref_path, reads1, reads2, conf.get('main', 'bwa_path'), conf.get('main', 'samtools_path'))
     verify_reads(reads1, reads2, bam, conf)

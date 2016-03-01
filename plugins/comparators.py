@@ -1,11 +1,8 @@
 
 import pysam
 import subprocess
-import sys
 import os
-import time
-import injectvar
-import util
+import vcomp.util
 
 
 ALLELE_MATCH="Alleles matched"
@@ -13,32 +10,13 @@ ALLELE_MISMATCH="Alleles did not match"
 ALLELE_EXTRA="Additional variants identified"
 
 
-
-def comp_zyg(tvar, qvar):
-    """
-    Compare the two variants for genotype (GT format field) and return a ZYGOSITY result of some sort
-    :param tvar: True variant
-    :param qvar: Query variant
-    :return:
-    """
-    t = util.get_first_gt(tvar)
-    q = util.get_first_gt(qvar)
-    if t == util.HET_GT:
-        if q == util.HET_GT:
-            return injectvar.ZYGOSITY_MATCH
-        if q == util.HOM_ALT_GT:
-            return injectvar.ZYGOSITY_EXTRA_ALLELE
-        if q == util.HOM_REF_GT:
-            return injectvar.ZYGOSITY_MISSING_ALLELE
-    if t == util.HOM_ALT_GT:
-        if q == util.HET_GT:
-            return injectvar.ZYGOSITY_MISSING_ALLELE
-        if q == util.HOM_ALT_GT:
-            return injectvar.ZYGOSITY_MATCH
-        if q == util.HOM_REF_GT:
-            return injectvar.ZYGOSITY_MISSING_TWO_ALLELES
-    raise ValueError('Should never get here - was true var Hom Ref?')
-
+def get_comparators():
+    return {
+        "raw": compare_raw,
+        "vgraph": compare_vgraph,
+        "vcfeval": compare_vcfeval,
+        "happy": compare_happy
+    }
 
 def compare_raw(orig_vcf, caller_vcf, bed, conf):
     """
@@ -78,8 +56,8 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
     if len(caller_vars)==0:
         return (read_all_vars(orig_vcf, bed), [], caller_vars)
 
-    orig_out = "vgout-orig." + util.randstr() + ".vcf"
-    caller_out = "vgout-caller." + util.randstr() + ".vcf"
+    orig_out = "vgout-orig." + vcomp.util.randstr() + ".vcf"
+    caller_out = "vgout-caller." + vcomp.util.randstr() + ".vcf"
     bedcmd = ""
     if bed is not None:
         bedcmd = " --include-regions " + bed
@@ -97,7 +75,8 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
         if bd == 'X':
             unmatched_orig.append(ovar)
         if bd == 'N':
-            unmatched_orig.append(util.ErrorVariant(chrom=ovar.chrom, start=ovar.start, msg="vgraph error code N"))
+            unmatched_orig.append(
+                vcomp.util.ErrorVariant(chrom=ovar.chrom, start=ovar.start, msg="vgraph error code N"))
 
     for cvar in pysam.VariantFile(caller_out):
         bd = cvar.samples[0]['BD']
@@ -106,7 +85,7 @@ def compare_vgraph(orig_vcf, caller_vcf, bed, conf):
         if bd == 'X':
             unmatched_caller.append(cvar)
         if bd == 'N':
-            unmatched_caller.append( util.ErrorVariant(chrom=cvar.chrom, start=cvar.start, msg="vgraph error code N"))
+            unmatched_caller.append(vcomp.util.ErrorVariant(chrom=cvar.chrom, start=cvar.start, msg="vgraph error code N"))
 
     return (unmatched_orig, matches, unmatched_caller)
 
@@ -119,7 +98,7 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
     if len(caller_vars)==0:
         return (read_all_vars(orig_vcf, bed), [], caller_vars)
 
-    output_dir = "vcfeval-output" + util.randstr()
+    output_dir = "vcfeval-output" + vcomp.util.randstr()
     cmd = "java -Djava.io.tmpdir=. -Xmx4g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " --all-records -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
     if bed is not None:
         cmd = cmd + " --bed-regions " + bed
@@ -136,7 +115,7 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
     caller_vars = read_all_vars(caller_vcf, bed)
     if len(caller_vars)==0:
         return (read_all_vars(orig_vcf, bed), [], caller_vars)
-    output_prefix = "happyoutput-" + util.randstr(6)
+    output_prefix = "happyoutput-" + vcomp.util.randstr(6)
 
     all_chrs = set([v.chrom for v in orig_vars])
     all_chrs.update([v.chrom for v in caller_vars])
@@ -165,16 +144,6 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
         else:
             raise ValueError('Unable to parse hap.py variant type: ' + vstr)
     return (orig_unmatched, matches, caller_unmatched)
-
-
-
-def get_comparators():
-    return {
-        "raw": compare_raw,
-        "vgraph": compare_vgraph,
-        "vcfeval": compare_vcfeval,
-        "happy": compare_happy
-    }
 
 
 def read_all_vars(vcf, bed=None):
@@ -216,8 +185,8 @@ def test_var_equiv(var1, var2):
     """
     alts1 = str([str(a) + "," for a in var1.alts])
     alts2 = str([str(a) +","  for a in var2.alts])
-    gt1 = util.get_first_gt(var1)
-    gt2 = util.get_first_gt(var2)
+    gt1 = vcomp.util.get_first_gt(var1)
+    gt2 = vcomp.util.get_first_gt(var2)
     return var1.chrom == var2.chrom and var1.start == var2.start and var1.ref == var2.ref and  alts1==alts2 and gt1 == gt2
 
 

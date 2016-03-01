@@ -1,8 +1,14 @@
 
 import subprocess
-import random
-import string
-import util
+from vcomp import util
+
+def get_normalizers():
+    return {
+        'vapleft': normalize_vap_leftalign,
+        'nonorm': normalize_nothing,
+        'vt': normalize_vt,
+        # 'bcftools': normalize_bcftools
+    }
 
 def normalize_nothing(orig_vcf, conf):
     """
@@ -58,21 +64,10 @@ def normalize_bcftools(orig_vcf, conf):
     :param conf:
     :return:
     """
-    norm_orig_vcf = orig_vcf.replace(".vcf.gz", ".norm.bcftools" + rndstr(6) + ".vcf")
+    norm_orig_vcf = orig_vcf.replace(".vcf.gz", ".norm.bcftools" + util.randstr() + ".vcf")
     norm_orig_cmd = conf.get('main', 'bcftools_path') + " norm " + " -c w -f " + conf.get('main', 'ref_genome') + " " + orig_vcf + " -o " + norm_orig_vcf
     subprocess.check_call(norm_orig_cmd.split())
     norm_orig_vcf = util.bgz_tabix(norm_orig_vcf, conf)
     return norm_orig_vcf
 
 
-def get_normalizers():
-    return {
-        #'vapleft': normalize_vap_leftalign,
-        'nonorm': normalize_nothing,
-        #'vt': normalize_vt,
-        # 'bcftools': normalize_bcftools
-    }
-
-
-def rndstr(length):
-    return "".join([random.choice(string.ascii_lowercase+string.ascii_uppercase) for _ in range(length)])

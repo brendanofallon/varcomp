@@ -1,9 +1,9 @@
-
-from vcomp import bam_simulation as bs
-from vcomp import injectvar as ij
 import ConfigParser as cp
 from collections import namedtuple
+
 import pysam
+
+from vcomp.sim import bam_simulation as bs
 
 Var = namedtuple('Var', ['chrom', 'start', 'ref', 'alts'])
 VarSet = namedtuple('VarSet', ['policy', 'vars'])

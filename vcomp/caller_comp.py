@@ -1,12 +1,15 @@
 import ConfigParser as cp
-import argparse
 import os
 import random
 import string
 
+import argparse
 import pysam
 
-import injectvar, bam_simulation, callers, comparators
+import callers
+import injectvar
+from plugins import comparators
+from vcomp.sim import bam_simulation
 
 
 def process_variant(variant_batch, results, conf, batchnum, homs):
