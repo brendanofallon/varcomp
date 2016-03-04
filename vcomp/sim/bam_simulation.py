@@ -5,7 +5,7 @@ from collections import defaultdict
 import pysam
 
 import read_simulator as rs
-import vcomp.util
+import util
 
 ALL_HETS="all hets"
 CIS = "cis"
@@ -185,15 +185,17 @@ def gen_alt_fq(ref_path, variant_sets, read_count, dest_prefix="input"):
         chrom = vset['vars'][0].chrom
         hap1, hap2 = collect_alts(vset)
 
-        alt_genome_path = 'alt_genome' + vcomp.util.randstr() + '.fa'
+        alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
         alt_genome_size = gen_alt_genome(chrom, hap1, ref_path, alt_genome_path, overwrite=True)
         generate_reads(alt_genome_path, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
-        os.read(alt_genome_path)
+        os.remove(alt_genome_path)
+        os.remove(alt_genome_path + ".fai")
 
-        alt_genome_path = 'alt_genome' + vcomp.util.randstr() + '.fa'
+        alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
         alt_genome_size = gen_alt_genome(chrom, hap2, ref_path, alt_genome_path, overwrite=True)
         generate_reads(alt_genome_path, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
-        os.read(alt_genome_path)
+        os.remove(alt_genome_path)
+        os.remove(alt_genome_path + ".fai")
 
     read1_fh.close()
     read2_fh.close()
