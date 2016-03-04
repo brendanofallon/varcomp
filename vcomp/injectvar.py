@@ -43,7 +43,7 @@ class JsonReporter(object):
             }, self.output)
             self.output.write("\n")
 
-def gen_reads(vars, dest_vcf, dest_fq_prefix, ex_snp, gt_policy, read_depth, conf):
+def gen_reads(vcf, dest_vcf, dest_fq_prefix, ex_snp, gt_policy, read_depth, conf):
     """
     Generate fastqs for the given set of input variants. This code is fired when the user supplies the --generate-fqs
     arg, and closely mimics the fastq generation code in VariantProcessor
@@ -55,7 +55,12 @@ def gen_reads(vars, dest_vcf, dest_fq_prefix, ex_snp, gt_policy, read_depth, con
     :param read_depth:
     :param conf:
     """
-    logging.info("Generating reads")
+
+    #First, make sure there aren't variants that are too close to process independently...
+    batches = util.batch_variants(vcf, max_batch_size=1e9)
+    if len(list(batches))>1:
+        raise ValueError('The VCF file ' + vcf + ' contains variants that are too close to include in a single set of fastqs, please ensure no two variants are within 2kb of each other')
+    vars = list(pysam.VariantFile(vcf))
     variant_sets = bp.create_variant_sets(vars, ex_snp, gt_policy, pysam.FastaFile( conf.get('main', 'ref_genome')))
     allvars = []
     for vset in variant_sets:
@@ -82,7 +87,13 @@ def load_components(conf, section, callable_name):
 
     for item in conf.items(section):
         try:
-            mod = imp.load_source(item[0], item[1])
+
+            if not os.path.isabs(item[1]):
+                pdir = os.path.split(__file__)[0]
+                mod_path = os.path.split( pdir )[0] + "/" + item[1]
+            else:
+                mod_path = item[1]
+            mod = imp.load_source(item[0], mod_path)
             if not callable_name in dir(mod):
                 raise ImportError('Module ' + item[1] + ' does not define a function called ' + callable_name)
             result = mod.__dict__[callable_name]()
@@ -134,30 +145,12 @@ def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None,
             os.remove(batch_vcf)
 
 
-
-if __name__=="__main__":
-    logging.basicConfig(level=logging.INFO,
-                        format='%(asctime)s - %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S')
-
-    parser = argparse.ArgumentParser("Inject, simulate, call, compare")
-    parser.add_argument("-c", "--conf", help="Path to configuration file", default="./comp.conf")
-    parser.add_argument("-v", "--vcf", help="Input vcf file(s)", nargs="+")
-    parser.add_argument("-k", "--keep", help="Dont delete temporary directories", action='store_true')
-    parser.add_argument("-b", "--batch", help="Treat each input VCF file as a single batch (default False)", action='store_true')
-    parser.add_argument("-s", "--seed", help="Random seed", default=None)
-    parser.add_argument("-o", "--output", help="Output destination", default=sys.stdout)
-    parser.add_argument("-r", "--readdepth", help="Number of reads to generate per variant", default=250, type=int)
-    parser.add_argument("-a", "--addsnp", help="Add a SNP upstream of each variant", action='store_true')
-    parser.add_argument("-t", "--trans", help="If SNP is added, add it in trans (default cis)", action='store_true')
-    parser.add_argument("--snphom", help="Added SNPs are homozygous (default het)", action='store_true')
-    parser.add_argument("--het", help="Force all simulated variants to be hets", action='store_true')
-    parser.add_argument("--hom", help="Force all simulated variants to be homozygotes", action='store_true')
-    parser.add_argument("--callers", help="Comma separated list of variant callers to use (default: use all)", action='append')
-    parser.add_argument("--fqs", help="Dont generate fastqs, use these instead (two entries expected)", action='append')
-    parser.add_argument("--generate-fqs", help="Generate fastqs only, do not perform any variant calling or comparison", action='store_true')
-    args = parser.parse_args()
-
+def main(args):
+    """
+    Respond to command line args, check for basic config errors, and perform analyses
+    :param args:
+    :return:
+    """
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
 
@@ -190,7 +183,9 @@ if __name__=="__main__":
         if len(args.vcf)>1:
             raise ValueError('Only one VCF supported for now')
         vcf = args.vcf[0]
-        gen_reads( list(pysam.VariantFile(vcf)), vcf.strip(".vcf").strip(".gz") + "_final.vcf", "reads", snp_inf, gt_default, args.readdepth, conf)
+        fastq_prefix = vcf.strip(".gz").strip(".vcf")
+        logging.info("Generating reads for vcf file " + vcf)
+        gen_reads(vcf, vcf.strip(".gz").strip(".vcf") + "_final.vcf", fastq_prefix, snp_inf, gt_default, args.readdepth, conf)
         exit(0)
 
 
@@ -202,3 +197,28 @@ if __name__=="__main__":
         args.output.close()
     except:
         pass
+
+if __name__=="__main__":
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+
+    parser = argparse.ArgumentParser("Inject, simulate, call, compare")
+    parser.add_argument("-c", "--conf", help="Path to configuration file", default="./comp.conf")
+    parser.add_argument("-v", "--vcf", help="Input vcf file(s)", nargs="+")
+    parser.add_argument("-k", "--keep", help="Dont delete temporary directories", action='store_true')
+    parser.add_argument("-b", "--batch", help="Treat each input VCF file as a single batch (default False)", action='store_true')
+    parser.add_argument("-s", "--seed", help="Random seed", default=None)
+    parser.add_argument("-o", "--output", help="Output destination", default=sys.stdout)
+    parser.add_argument("-r", "--readdepth", help="Number of reads to generate per variant", default=250, type=int)
+    parser.add_argument("-a", "--addsnp", help="Add a SNP upstream of each variant", action='store_true')
+    parser.add_argument("-t", "--trans", help="If SNP is added, add it in trans (default cis)", action='store_true')
+    parser.add_argument("--snphom", help="Added SNPs are homozygous (default het)", action='store_true')
+    parser.add_argument("--het", help="Force all simulated variants to be hets", action='store_true')
+    parser.add_argument("--hom", help="Force all simulated variants to be homozygotes", action='store_true')
+    parser.add_argument("--callers", help="Comma separated list of variant callers to use (default: use all)", action='append')
+    parser.add_argument("--fqs", help="Dont generate fastqs, use these instead (two entries expected)", action='append')
+    parser.add_argument("--generate-fqs", help="Generate fastqs only, do not perform any variant calling or comparison", action='store_true')
+    args = parser.parse_args()
+
+    main(args)
