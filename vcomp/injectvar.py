@@ -93,6 +93,7 @@ def load_components(conf, section, callable_name):
                 mod_path = os.path.split( pdir )[0] + "/" + item[1]
             else:
                 mod_path = item[1]
+            logging.info("Loading plugins from module " + mod_path)
             mod = imp.load_source(item[0], mod_path)
             if not callable_name in dir(mod):
                 raise ImportError('Module ' + item[1] + ' does not define a function called ' + callable_name)
