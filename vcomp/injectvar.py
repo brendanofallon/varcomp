@@ -11,6 +11,9 @@ import imp
 import util
 from sim import bam_simulation
 import batch_processor as bp
+from plugins import core_callers,\
+    normalizers as core_norms, \
+    comparators as core_comps
 
 
 all_result_types = (bp.MATCH_RESULT, bp.NO_MATCH_RESULT, bp.NO_VARS_FOUND_RESULT, bp.MATCH_WITH_EXTRA_RESULT, bp.ZYGOSITY_MISSING_ALLELE, bp.ZYGOSITY_EXTRA_ALLELE, bp.ERROR_RESULT)
@@ -115,9 +118,13 @@ def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None,
     :param conf: Configuration object
     """
 
-    variant_callers = load_components(conf, 'callers', 'get_callers')
-    normalizers = load_components(conf, 'normalizers', 'get_normalizers')
-    comparators = load_components(conf, 'comparators', 'get_comparators')
+    variant_callers = core_callers.get_callers()
+    #variant_callers.update(load_components(conf, 'callers', 'get_callers'))
+
+    normalizers = core_norms.get_normalizers()
+    #normalizers.update(load_components(conf, 'normalizers', 'get_normalizers'))
+    comparators = core_comps.get_comparators()
+    #comparators.update(load_components(conf, 'comparators', 'get_comparators'))
 
     if callers is not None and len(callers)>0:
         callers_to_use = {}
