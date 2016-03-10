@@ -76,7 +76,7 @@ def gen_reads(vcf, dest_vcf, dest_fq_prefix, ex_snp, gt_policy, read_depth, conf
 def load_components(conf, section, callable_name):
     """
     Create a dict of string -> callables by examining the configuration object, loading any modules
-    defined therein, and then calling the 'callable_name' function in the module. That function should
+    defined in the given section, and then calling the 'callable_name' function in the module. That function should
     return a dict, which we add to the dict to return.
     :param conf:  Configuration object
     :param section:  Section to examine in configuration (e.g. 'callers')
@@ -108,10 +108,10 @@ def load_components(conf, section, callable_name):
 def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None, single_batch=False, keep_tmpdir=False, read_depth=250):
     """
     Perform analyses for each variant in the VCF file.
-    :param input_vcf:
+    :param input_vcf: Path to vcf file containing variants to process
     :param single_batch: Assume all variants in VCF are part of one batch and process them all simultaneously
     :param keep_tmpdir: Preserve tmpdirs created (otherwise delete them, unless they are flagged)
-    :param conf:
+    :param conf: Configuration object
     """
 
     variant_callers = load_components(conf, 'callers', 'get_callers')

@@ -1,8 +1,10 @@
 
 import argparse
+import intervaltree
 import pysam
 import random
 import sys
+from collections import defaultdict
 
 bases = ['A', 'C', 'T', 'G']
 region_margin = 20
@@ -82,28 +84,38 @@ def gen_del_snp_mnp(ref, chr, location, size):
     alt = ref_bases[0] + random.choice(okbases) + ref_bases[2:]
     return "\t".join([chr, str(location+1), ".", ref_bases, alt + "," + del_alt ])
 
-def pick_location(regions):
+def pick_location(regions, blacklist=None, min_safe_dist = 1000):
     region = random.choice(regions)
     loc = random.randint(region[1], region[2])
+    if blacklist is not None:
+        hits = blacklist[region[0]][loc-min_safe_dist:loc+min_safe_dist]
+        while len(hits)>0:
+            region = random.choice(regions)
+            loc = random.randint(region[1], region[2])
+            hits = blacklist[region[0]][loc-min_safe_dist:loc+min_safe_dist]
+        blacklist[region[0]].addi(loc, loc+1)
+
+
     return (region[0], loc)
 
 
 
 def generate_all(ref, regions, output):
-    reps_per_size = 200
+    reps_per_size = 20
     repeats = 1
+    blacklist = defaultdict(intervaltree.IntervalTree)
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
-        loc = pick_location(regions)
-        for size in range(15, 21, 10):
+        for size in range(1, 121, 10):
+            loc = pick_location(regions, blacklist)
             #var = gen_deletion(ref, loc[0], loc[1], size)
             #var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
             #var = gen_insertion(ref, loc[0], loc[1], size)
             # var = gen_snp(ref, loc[0], loc[1], size)
-            var = gen_duplication(ref, loc[0], loc[1], size)
-            #var = gen_blocksub(ref, loc[0], loc[1], size)
+            #var = gen_duplication(ref, loc[0], loc[1], size)
+            var = gen_blocksub(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
             for _ in range(repeats):
                 output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")

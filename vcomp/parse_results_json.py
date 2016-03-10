@@ -1,6 +1,6 @@
 
 import json
-import injectvar
+import injectvar, batch_processor
 import sys
 from collections import defaultdict
 import matplotlib.pyplot as plt
@@ -12,18 +12,22 @@ QUALS="caller_quals"
 BAMSTATS = "bamstats"
 RESULTS = "results"
 
+GATK_HC="gatk-hc"
+RTG="rtg"
+FREEBAYES="freebayes"
 VGRAPH = "vgraph"
 HAPPY = "happy"
 VAP_LEFT = "vapleft"
+VT = "vt"
 VCFEVAL = "vcfeval"
 NO_NORM = "nonorm"
 RAW_COMP = "raw"
 
 LABEL_SUBS = {
-    injectvar.NO_VARS_FOUND_RESULT: "Ref. call",
-    injectvar.ZYGOSITY_MISSING_ALLELE: "Zygosity error",
-    injectvar.NO_MATCH_RESULT: "Other mismatch",
-    injectvar.MATCH_RESULT: "Match",
+    batch_processor.NO_VARS_FOUND_RESULT: "Ref. call",
+    batch_processor.ZYGOSITY_MISSING_ALLELE: "Zygosity error",
+    batch_processor.NO_MATCH_RESULT: "Other mismatch",
+    batch_processor.MATCH_RESULT: "Match",
 }
 
 class Tabelize(object):
@@ -79,7 +83,7 @@ class NormBreakFinder(object):
     def perform_op(self, results):
         for caller in results[RESULTS]:
             try:
-                 if results[RESULTS][caller][self.nonorm_method][self.comp_method] == injectvar.MATCH_RESULT and results[RESULTS][caller][self.norm_method1][self.omp_method] != injectvar.MATCH_RESULT:
+                 if results[RESULTS][caller][self.nonorm_method][self.comp_method] == batch_processor.MATCH_RESULT and results[RESULTS][caller][self.norm_method1][self.omp_method] != batch_processor.MATCH_RESULT:
                      self.breaks[results[VARIANT] + "-" + caller] = self.norm_method1 + ": " + results[RESULTS][caller][self.norm_method1][self.comp_method] + "  " + self.nonorm_method + ": " + results[RESULTS][caller][self.nonorm_method][self.comp_method]
             except:
                 pass
@@ -96,30 +100,82 @@ class NormBreakFinder(object):
 class VAPFailsVgraphHits(object):
 
     def __init__(self):
-        self.hits = {}
+        self.vap_hits = defaultdict(dict)
+        self.vt_hits = defaultdict(dict)
+        self.naive_hits = defaultdict(dict)
         self.vgraph = VGRAPH
         self.vapleft = VAP_LEFT
+        self.vt = VT
         self.nonorm = NO_NORM
         self.rawcomp = RAW_COMP
+        self.tot = defaultdict(int)
+        self.callers = [GATK_HC]
 
     def perform_op(self, results):
         var_results = results[RESULTS]
-        for caller in var_results:
-            try:
-                vap_result = var_results[caller][self.vapleft][self.rawcomp]
-                graph_result = var_results[caller][self.nonorm][self.vgraph]
-                if vap_result != graph_result:
-                    self.hits[results[VARIANT]] = caller + " " + self.vapleft + ": " + vap_result + "  " + self.vgraph + ": " + graph_result
-            except KeyError:
-                pass
+        vartype = get_vartype(results[VARIANT])
+
+        caller = self.callers[0]
+        try:
+            vt_result = var_results[caller][self.vt][self.rawcomp]
+            vap_result = var_results[caller][self.vapleft][self.rawcomp]
+            graph_result = var_results[caller][self.nonorm][self.vgraph]
+            naive_result = var_results[caller][self.nonorm][self.rawcomp]
+
+            if graph_result != batch_processor.MATCH_RESULT:
+                return
+
+            if vt_result != graph_result:
+                self.vt_hits[vartype][results[VARIANT]] = caller + " " + self.vt + ": " + vt_result + "  " + self.vgraph + ": " + graph_result
+            if vap_result != graph_result:
+                self.vap_hits[vartype][results[VARIANT]] = caller + " " + self.vapleft + ": " + vap_result + "  " + self.vgraph + ": " + graph_result
+            if naive_result != graph_result:
+                self.naive_hits[vartype][results[VARIANT]] = caller + " " + self.nonorm + ": " + naive_result + "  " + self.vgraph + ": " + graph_result
+            self.tot[vartype] += 1
+        except KeyError:
+            pass
 
     def finalize(self):
         print "VAP / raw match fails, matched by " + self.vgraph
-        if len(self.hits)==0:
-            print "\tNone detected"
-        else:
-             for var, result in self.hits.iteritems():
-                 print var + "\t" + result
+
+        tothits = 0.0
+        tottot = 0.0
+        for vartype in sorted(self.tot):
+            tothits += len(self.vap_hits[vartype])
+            tottot += self.tot[vartype]
+            print vartype + ": ",
+            for var, result in self.vap_hits[vartype].iteritems():
+                print var + "\t" + result
+            print vartype + "\t" + str(len(self.vap_hits[vartype])/float(self.tot[vartype])) #+ "\t" + str(len(self.vap_hits[vartype])) + "\t" + str(self.tot[vartype])
+        print "VAP / LeftAlign overall:\t" + str(tothits / tottot) + "\t" + str(tottot)
+
+        tothits = 0.0
+        tottot = 0.0
+        print "\n\nVT / raw match fails, matched by " + self.vgraph
+        for vartype in sorted(self.tot):
+            tothits += len(self.vt_hits[vartype])
+            tottot += self.tot[vartype]
+            print vartype + ": ",
+            for var, result in self.vt_hits[vartype].iteritems():
+               print var + "\t" + result
+            print vartype + "\t" + str(len(self.vt_hits[vartype])/float(self.tot[vartype])) #+ "\t" + str(len(self.vt_hits[vartype])) + "\t" + str(self.tot[vartype])
+        print "VT:\t" + str(tothits / tottot) + "\t" + str(tottot)
+
+        tothits = 0.0
+        tottot = 0.0
+        print "\n\nNaive match fails, matched by " + self.vgraph
+        for vartype in sorted(self.tot):
+            tothits += len(self.naive_hits[vartype])
+            tottot += self.tot[vartype]
+            #print vartype + ": ",
+            # for var, result in self.naive_hits[vartype].iteritems():
+            #     print var + "\t" + result
+            print vartype + "\t" + str(len(self.naive_hits[vartype])/float(self.tot[vartype])) #+ "\t" + str(len(self.naive_hits[vartype])) + "\t" + str(self.tot[vartype])
+        print "Naive:\t" + str(tothits / tottot)+  "\t" + str(tottot)
+
+        print "\n\nTotal variants by type:"
+        for vartype, tot in self.tot.iteritems():
+            print vartype + " : " + str(tot)
 
 class CallerSummary(object):
 
@@ -256,6 +312,7 @@ class GraphCompMismatches(object):
                 print k + "\t" + v
 
 
+
 def plot_results(data):
     fig = plt.figure()
     fig.patch.set_facecolor('white')
@@ -265,7 +322,7 @@ def plot_results(data):
     ax = plt.subplot(111)
     ax.yaxis.grid(True)
     vals = {}
-    results = [injectvar.MATCH_RESULT, injectvar.NO_MATCH_RESULT,injectvar.ZYGOSITY_MISSING_ALLELE, injectvar.NO_VARS_FOUND_RESULT]
+    results = [batch_processor.MATCH_RESULT, batch_processor.NO_MATCH_RESULT,batch_processor.ZYGOSITY_MISSING_ALLELE, batch_processor.NO_VARS_FOUND_RESULT]
 
     prev = None
     colors = ('green', 'yellow', 'orange', 'red',)
@@ -302,7 +359,7 @@ def plot_callers_line(data, titles):
     fig.patch.set_facecolor('white')
     cmap = cm.get_cmap('CMRmap')
     markers = ['.', 'o', 'v', '+', 's', '*', '>', 'x', 'D', '<', '^']
-    target_result = injectvar.MATCH_RESULT
+    target_result = batch_processor.MATCH_RESULT
 
 
     #Need to accumulate a single list of accuracies for a given caller across sizes
@@ -336,7 +393,7 @@ def plot_callers(data, titles):
     cols = len(data[0])
     xmod = 0.5
     ymax = 0
-    results = [injectvar.MATCH_RESULT, injectvar.NO_MATCH_RESULT,injectvar.ZYGOSITY_MISSING_ALLELE, injectvar.NO_VARS_FOUND_RESULT]
+    results = [batch_processor.MATCH_RESULT, batch_processor.NO_MATCH_RESULT,batch_processor.ZYGOSITY_MISSING_ALLELE, batch_processor.NO_VARS_FOUND_RESULT]
     for c, ins in enumerate( itertools.chain(*data)):
         labels = []
         ax = plt.subplot(rows, cols, c+1)
@@ -384,6 +441,29 @@ def parseline(line):
     """
     return json.loads(line)
 
+
+def sizebin(size):
+    bins = [-30, -20, -10, 0, 5, 10, 20, 50]
+    if size < bins[0]:
+        return "<" + str(bins[0])
+    for l, u in zip(bins[:-1], bins[1:]):
+        if size>l and size<=u:
+            return str(l) + "-" + str(u)
+    return ">" + str(bins[-1])
+
+def get_vartype(varstr):
+    vars = varstr.split("/")
+    toks = vars[-1].split()
+    ref = toks[3]
+    alt = toks[4]
+    if len(ref)==1 and len(alt)==1:
+        return "SNP"
+    if len(ref)<2 and len(alt)>1:
+        return "Insertion (" + sizebin(len(alt)-len(ref)) + ")"
+    if len(alt)<2 and len(ref)>1:
+        return "Deletion (" + sizebin(len(ref)-len(alt)) + ")"
+    return "MNP " + sizebin( len(ref))
+
 def main(path, operations=[]):
     line_num = 0
     with open(path) as fh:
@@ -413,9 +493,9 @@ if __name__=="__main__":
 
     ops = [
 
-        Tabelize(),
+        # Tabelize(),
         #NormBreakFinder(),
-    #    VAPFailsVgraphHits(),
+        VAPFailsVgraphHits(),
         #GraphCompMismatches(),
         #CallerSummary(),
         #CallerSummaryBySize(range(1, 120, 5)),
