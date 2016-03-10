@@ -4,7 +4,7 @@ from collections import defaultdict
 
 import pysam
 
-from vcomp.sim import read_simulator as rs
+import read_simulator as rs
 from vcomp import util
 
 ALL_HETS="all hets"
