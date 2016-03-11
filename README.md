@@ -76,5 +76,37 @@ Lastly, add a line to the main configuration file under the 'callers' section st
      
 
 
+## Docker based setup
+
+There are three Docker files present in this repository:
+1. Dockerfile-vcomp-base which sets up all of the third-party tools used in the benchmakrs by default
+2. Dockerfile-vcomp which adds the varcomp code onto the image produced Dockerfile-vcomp-base
+3. Dockerfile which builds the entire image on its own (i.e. Dockerfile-vcomp-base + Dockerfile-vcomp)
+
+First and second Dockerfiles are intended for development usage, as building the image with the third-party tools takes a bit of time.
+Thus, to build the docker image start by cloning this repository:
+
+        git clone https://github.com/goranrakocevic/varcomp.git
+        cd varcomp
+
+Building with the default set of options requires access to GATK JAR file, and the Platypus source folder (by default, they will be sought in the varcomp folder, so you should either copy/link them there, or modify the appropriate dockerfile to point to the right path)
+
+You can then build the image either by calling:
+
+        docker build -t vcomp-base:v1 -f Dockerfile-vcomp-base .
+        docker build -t vcomp:v1 -f Dockerfile-vcomp .
+
+Or:
+    
+        docker build -t vcomp:v1 -f Dockerfile .
+
+File comp-docker.conf holds the configurations for all of the tools, while you may need to adjust the input files.
+You should be ready  start varcomp:
+
+        docker run -v /path/to/data:/data   \
+                   -v /path/to/out/dir:/out \
+                   -w /out                  \
+                   vcomp:v1                 \
+                   python /opt/varcomp/vcomp/injectvar.py -v /data/test.single.vcf --het -c /data/comp-docker.conf
 
 
