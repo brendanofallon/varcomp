@@ -9,7 +9,7 @@ def get_callers():
         "platypus": call_variant_platypus,
         "varscan": call_variant_varscan,
         #platypus-asm": call_variant_platypus_asm,
-        "rtg": call_variant_rtg,
+        #"rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,
         #"wecall": call_wecall,
         "gatk-ug": call_variant_gatk_ug

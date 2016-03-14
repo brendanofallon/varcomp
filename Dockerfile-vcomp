@@ -1,0 +1,10 @@
+#Requires Dockerfile-vcomp-base to be built and tagged as vcomp-base:v1
+FROM vcomp-base:v1
+
+RUN apt-get update
+RUN apt-get install python-scipy -y
+RUN apt-get install python-matplotlib -y
+WORKDIR /opt/
+RUN git clone https://github.com/goranrakocevic/varcomp.git
+WORKDIR /opt/varcomp
+RUN pip install .
