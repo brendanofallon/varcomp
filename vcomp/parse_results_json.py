@@ -3,6 +3,8 @@ import json
 import injectvar, batch_processor
 import sys
 from collections import defaultdict
+# import seaborn as sns
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import itertools
@@ -39,7 +41,7 @@ class Tabelize(object):
 
     def perform_op(self, results):
         if self.first:
-            print "\t".join(["#variant", "quality", "totalreads", "properpairs", "mq20", "mq40", "softclipped_reads", "softclipped_bases", "caller", "normalizer", "comparator", "result"])
+            print "\t".join(["variant", "quality", "totalreads", "properpairs", "mq20", "mq40", "softclipped_reads", "softclipped_bases", "caller", "normalizer", "comparator", "result"])
             self.first = False
         var = results[VARIANT]
         for caller, caller_results in results[RESULTS].iteritems():
@@ -122,8 +124,10 @@ class VAPFailsVgraphHits(object):
             graph_result = var_results[caller][self.nonorm][self.vgraph]
             naive_result = var_results[caller][self.nonorm][self.rawcomp]
 
-            if graph_result != batch_processor.MATCH_RESULT:
-                return
+            # if graph_result != batch_processor.MATCH_RESULT:
+            #     return
+            # if vap_result != batch_processor.MATCH_RESULT:
+            #     return
 
             if vt_result != graph_result:
                 self.vt_hits[vartype][results[VARIANT]] = caller + " " + self.vt + ": " + vt_result + "  " + self.vgraph + ": " + graph_result
@@ -316,22 +320,66 @@ class GraphCompMismatches(object):
 def plot_results(data):
     fig = plt.figure()
     fig.patch.set_facecolor('white')
+    # sns.set(style="white")
     xmod = 0.5
     xlocs = []
     labels = []
-    ax = plt.subplot(111)
+    ax = plt.subplot(211)
     ax.yaxis.grid(True)
     vals = {}
-    results = [batch_processor.MATCH_RESULT, batch_processor.NO_MATCH_RESULT,batch_processor.ZYGOSITY_MISSING_ALLELE, batch_processor.NO_VARS_FOUND_RESULT]
 
-    prev = None
-    colors = ('green', 'yellow', 'orange', 'red',)
+    results = [batch_processor.NO_MATCH_RESULT, batch_processor.ZYGOSITY_MISSING_ALLELE, batch_processor.NO_VARS_FOUND_RESULT]
+
+    colors = ('green', 'orange')
     ymax = 0
-    for j, res in enumerate(results):
+
+    tots = defaultdict(int)
+    for caller in data:
+        for res in [batch_processor.MATCH_RESULT, batch_processor.NO_VARS_FOUND_RESULT, batch_processor.NO_MATCH_RESULT, batch_processor.ZYGOSITY_MISSING_ALLELE]:
+            tots[caller] += data[caller][res]
+
+    #First, plot the matches on the first plot
+    v = []
+    labels = []
+    for caller in data:
+        v.append(data[caller][batch_processor.MATCH_RESULT] / float(tots[caller]))
+        labels.append(caller)
+    vals[caller] = v
+    prev = v
+    bars = ax.bar(range(len(v)), v, color=colors[0], label="Correct call")
+    for bar in bars:
+        ax.text(bar.get_x() + bar.get_width()/3.5, 0.925*bar.get_height(), "{:.3n}".format(bar.get_height()), size='small', color='black')
+    v = []
+    labels = []
+    for caller in data:
+        v.append(sum([data[caller][batch_processor.NO_MATCH_RESULT], data[caller][batch_processor.ZYGOSITY_MISSING_ALLELE], data[caller][batch_processor.NO_VARS_FOUND_RESULT]]))
+        labels.append(caller)
+    vals[caller] = v
+
+    ax.bar(range(len(v)), v, bottom=prev, color=colors[1], label="Incorrect call")
+
+
+    ax.set_ylim([0,1.0])
+    ax.set_ylabel("Fraction of correct calls")
+    ax.set_xticklabels(labels, rotation=45, horizontalalignment='left')
+     # ax.set_xticks([x+0.3 for x in xlocs])
+    ax.legend(loc='lower right', fontsize='small')
+
+
+    colors = ('red', 'orange', 'yellow')
+    prev = None
+    ax = plt.subplot(212)
+    ax.yaxis.grid(True)
+    tots = defaultdict(int)
+    for caller in data:
+        for res in [batch_processor.NO_VARS_FOUND_RESULT, batch_processor.NO_MATCH_RESULT, batch_processor.ZYGOSITY_MISSING_ALLELE]:
+            tots[caller] += data[caller][res]
+
+    for j, res in enumerate([batch_processor.NO_VARS_FOUND_RESULT, batch_processor.NO_MATCH_RESULT, batch_processor.ZYGOSITY_MISSING_ALLELE]):
         v = []
         labels = []
         for i, caller in enumerate(data):
-            v.append(data[caller][res])
+            v.append(data[caller][res] / float(tots[caller]))
             labels.append(caller)
         vals[caller] = v
 
@@ -339,19 +387,27 @@ def plot_results(data):
         if label in LABEL_SUBS:
             label = LABEL_SUBS[res]
 
-        vmax = max(v) if len(v)>0 else 0
-        if vmax > ymax:
-            ymax = vmax
-        ax.bar(range(len(v)), v, width=0.5, bottom=prev, color=colors[j], label=label)
+        bars = ax.bar(range(len(v)), v, bottom=prev, color=colors[j], label=label)
+        for bar in bars:
+            if bar.get_height() > 0:
+                height_offset = bar.get_height()+0.03
+                if prev is not None:
+                    height_offset += prev[bars.index(bar)]
+                height_offset = min(0.925, height_offset)
+                ax.text(bar.get_x() + bar.get_width()/3.5, height_offset, "{:.2g}".format(bar.get_height()), size='small', color='black')
         if prev is None:
             prev = v
         else:
             prev = [a+b for a,b in zip(prev, v)]
 
-    ax.set_ylim([0,ymax])
-    ax.set_xticklabels(labels, rotation=45, horizontalalignment='center')
+    ax.set_ylim([0,1.0])
+    ax.set_ylabel("Fraction of erroneous calls by type")
+    ax.set_xticklabels(labels, rotation=45, horizontalalignment='left')
      # ax.set_xticks([x+0.3 for x in xlocs])
-    ax.legend(loc='lower right')
+    ax.legend(loc='center right', fontsize='small')
+
+    plt.tight_layout()
+    plt.savefig("calls.png", dpi=200)
     plt.show()
 
 def plot_callers_line(data, titles):
@@ -421,7 +477,7 @@ def plot_callers(data, titles):
         ax.set_ylim([0,ymax])
         ax.yaxis.grid(True)
         # bars = ax.bar(xlocs, vals, 0.8)
-        ax.set_xticklabels(labels, size='small', rotation=45, horizontalalignment='center')
+        ax.set_xticklabels(labels, size='small', rotation=45, horizontalalignment='left')
         # ax.set_xticks([x+0.3 for x in xlocs])
         # for bar in bars:
         #     ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(), str(int(bar.get_height())), ha='center', va='bottom', size='small')
@@ -493,11 +549,11 @@ if __name__=="__main__":
 
     ops = [
 
-        # Tabelize(),
+        #Tabelize(),
         #NormBreakFinder(),
-        VAPFailsVgraphHits(),
+        #VAPFailsVgraphHits(),
         #GraphCompMismatches(),
-        #CallerSummary(),
-        #CallerSummaryBySize(range(1, 120, 5)),
+        CallerSummary(),
+        #CallerSummaryBySize(range(1, 120, 25)),
     ]
     main(sys.argv[1], ops)

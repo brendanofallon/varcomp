@@ -183,8 +183,11 @@ def test_var_equiv(var1, var2):
     :param var2:
     :return: True if both variant records are identical (contain same alts with same GT fields)
     """
-    alts1 = str([str(a) + "," for a in var1.alts])
-    alts2 = str([str(a) +","  for a in var2.alts])
+    v1alts = var1.alts if var1.alts is not None else [] #I guess these can sometimes be None?
+    v2alts = var2.alts if var2.alts is not None else []
+
+    alts1 = str([str(a) + "," for a in v1alts])
+    alts2 = str([str(a) +","  for a in v2alts])
     gt1 = vcomp.util.get_first_gt(var1)
     gt2 = vcomp.util.get_first_gt(var2)
     return var1.chrom == var2.chrom and var1.start == var2.start and var1.ref == var2.ref and  alts1==alts2 and gt1 == gt2
