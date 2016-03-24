@@ -9,7 +9,7 @@ def get_callers():
         "platypus": call_variant_platypus,
         "varscan": call_variant_varscan,
         #platypus-asm": call_variant_platypus_asm,
-        #"rtg": call_variant_rtg,
+        "rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,
         #"wecall": call_wecall,
         "gatk-ug": call_variant_gatk_ug
@@ -28,7 +28,8 @@ def call_variant_fb(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-fb.vcf"
     cmd=[conf.get('main', 'freebayes_path'), "-f", orig_genome_path, "-t", bed, "-b", bam, "-v", vcfoutput]
     subprocess.check_output(cmd)
-    return util.sort_vcf(vcfoutput, conf)
+    sorted_vcf = util.sort_vcf(vcfoutput, conf)
+    return util.compress_vcf(sorted_vcf, conf)
 
 def call_variant_fb_minrepeatentropy(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-fb.vcf"

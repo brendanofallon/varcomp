@@ -193,16 +193,35 @@ def read_regions(bedfile):
         toks = line.split('\t')
         yield Region(toks[0], int(toks[1]), int(toks[2]))
 
+
+def is_empty(vcf):
+    """
+    Return True if the vcf file contains at least one variant, this doesn't use pysam
+    :param vcf: Path to possibly-gzipped vcf file
+    """
+    if vcf.endswith('.gz'):
+        fh = gzip.open(vcf)
+    else:
+        fh = open(vcf)
+    for line in fh.readlines():
+        if len(line)>0 and line[0] != '#':
+            fh.close()
+            return False
+    return True
+
 def find_matching_var(vars, region):
     """
     Collect a list of the variants in the vars list whose start position is contained in the given region
     :param vars:
     :param region:
-    :param gt:
     :param conf:
-    :return:
+    :return: List of variants in region
     """
-    matches = [var for var in vars if var.chrom==region.chr and var.start >= region.start and var.start <= region.end]
+    if type(vars) == str:
+        with pysam.VariantFile(vars) as vfile:
+            matches = [var for var in vfile if var.chrom==region.chr and var.start >= region.start and var.start <= region.end]
+    else:
+        matches = [var for var in vars if var.chrom==region.chr and var.start >= region.start and var.start <= region.end]
     return matches
 
 def gen_snp(chrom, pos, gt, ref_genome):

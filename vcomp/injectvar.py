@@ -88,6 +88,12 @@ def load_components(conf, section, callable_name):
     """
     components = {}
 
+    #Allow missing section
+    try:
+        items = conf.items(section)
+    except:
+        return components
+
     for item in conf.items(section):
         try:
 
@@ -119,12 +125,13 @@ def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None,
     """
 
     variant_callers = core_callers.get_callers()
-    #variant_callers.update(load_components(conf, 'callers', 'get_callers'))
+    variant_callers.update(load_components(conf, 'callers', 'get_callers'))
 
     normalizers = core_norms.get_normalizers()
-    #normalizers.update(load_components(conf, 'normalizers', 'get_normalizers'))
+    normalizers.update(load_components(conf, 'normalizers', 'get_normalizers'))
+
     comparators = core_comps.get_comparators()
-    #comparators.update(load_components(conf, 'comparators', 'get_comparators'))
+    comparators.update(load_components(conf, 'comparators', 'get_comparators'))
 
     if callers is not None and len(callers)>0:
         callers_to_use = {}

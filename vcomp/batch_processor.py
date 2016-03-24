@@ -79,13 +79,20 @@ class VariantProcessor(object):
 
             #Compute bam statistics separately for each region, and store them in a dictionary indexed
             #by the same key used to store individual varian results
+
+            # origvars = pysam.VariantFile(orig_vcf, 'rb')
             for region in util.read_regions(bed):
-                match_vars = util.find_matching_var( pysam.VariantFile(orig_vcf), region)
+                match_vars = util.find_matching_var( orig_vcf, region)
                 match_var = "/".join([" ".join(str(mvar).split()[0:5]) for mvar in match_vars])
                 bam_stats[match_var] = bam_simulation.gen_bam_stats(bam, region)
                 for caller in self.callers:
-                    cvar = util.find_matching_var(pysam.VariantFile(variants[caller]), region)
-                    var_quals[match_var][caller] = find_qual(cvar)
+                    #Avoid pysam bug with empty vcfs
+                    if util.is_empty(variants[caller]):
+                        var_quals[match_var][caller] = MISSING_QUAL
+                    else:
+                        with pysam.VariantFile(variants[caller]) as cvars:
+                            cvar = util.find_matching_var(cvars, region)
+                            var_quals[match_var][caller] = find_qual(cvar)
 
 
             for normalizer_name, normalizer in self.normalizers.iteritems():
@@ -98,11 +105,11 @@ class VariantProcessor(object):
                     for comparator_name, comparator in self.comparators.iteritems():
                         all_results = comparator(normed_orig_vcf, normed_caller_vcf, None, conf)
                         single_results = split_results(all_results, bed)
-                        logging.info("Running comparator " + comparator_name)
+                        logging.info("Running comparator " + comparator_name + " (normalizer " + normalizer_name + ")")
                         for region, result in zip(util.read_regions(bed), single_results):
-                            match_vars = util.find_matching_var( pysam.VariantFile(orig_vcf), region)
+                            match_vars = util.find_matching_var(orig_vcf, region)
                             if len(match_vars)==0:
-                                raise ValueError('Unable to find original variant from region!')
+                                raise ValueError('Unable to find original variant from region ' + str(region))
 
                             result = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, "/".join([str(i) for i in match_vars[0].samples[0]['GT']]), conf)
 

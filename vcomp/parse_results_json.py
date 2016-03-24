@@ -282,8 +282,69 @@ class CallerSummaryBySize(object):
         #      plot_callers_line(self.ins_summary, [str(x) for x in self.breaks + [str(self.breaks[-1]) + "+" ]])
         # else:
 
-        plot_callers_line(self.del_summary, [str(x) for x in self.breaks + [str(self.breaks[-1]) + "+" ]])
+        plot_callers_line(self.ins_summary, [str(x) for x in self.breaks + [str(self.breaks[-1]) + "+" ]])
 
+
+class AccuracyBySoftclip(object):
+    """
+    Compute match percentage as a function of number of softclipped reads
+    """
+
+    def __init__(self):
+        self.stat = "softclipped_reads"
+        self.bins = [x/20.0 for x in range(10)]
+        self.matches = {}
+        self.totals = {}
+        self.norm = NO_NORM
+        self.comp = VGRAPH
+
+    def perform_op(self, results):
+        var_results = results[RESULTS]
+        vartype = get_vartype(results[VARIANT])
+        if vartype != "Insertion (10-20)":
+            return
+
+        try:
+            stat = float(results[BAMSTATS][self.stat]) / float(results[BAMSTATS]['total_reads'])
+        except KeyError:
+            stat = 0
+        bin = self._index(stat)
+        if bin is None:
+            return
+        for caller in var_results:
+            if caller not in self.totals:
+                self.totals[caller] = [0 for _ in range(len(self.bins))]
+                self.matches[caller] = [0 for _ in range(len(self.bins))]
+
+            self.totals[caller][bin] += 1
+
+            res1 = var_results[caller][self.norm][self.comp]
+            if res1 == batch_processor.MATCH_RESULT:
+                self.matches[caller][bin] += 1
+
+
+    def finalize(self):
+        for caller in self.totals:
+            print caller + "\t",
+        print ""
+        for i,l,u in zip(range(len(self.bins)), [0] + self.bins[0:-1], self.bins):
+            print str(u),
+
+            for caller in self.totals:
+                mval = float(self.matches[caller][i])
+                totval = float(self.totals[caller][i])
+                if mval==0.0:
+                    print "\t0.0",
+                else:
+                    print "\t" + "{:3g}".format(mval/totval),
+            print ""
+
+
+    def _index(self, val):
+        for j, bin in enumerate(self.bins):
+            if val < bin:
+                return j
+        return None
 
 
 
@@ -390,10 +451,14 @@ def plot_results(data):
         bars = ax.bar(range(len(v)), v, bottom=prev, color=colors[j], label=label)
         for bar in bars:
             if bar.get_height() > 0:
-                height_offset = bar.get_height()+0.03
+                height_offset = bar.get_height()-0.068 if bar.get_height() > 0.06 else bar.get_height()-0.05
                 if prev is not None:
                     height_offset += prev[bars.index(bar)]
-                height_offset = min(0.925, height_offset)
+                    if prev[bars.index(bar)] > 0.95:
+                        height_offset = 1.02
+                    # if height_offset-prev[bars.index(bar)] < 0.1:
+                    #     height_offset = prev[bars.index(bar)]+0.02
+                # height_offset = min(0.925, height_offset)
                 ax.text(bar.get_x() + bar.get_width()/3.5, height_offset, "{:.2g}".format(bar.get_height()), size='small', color='black')
         if prev is None:
             prev = v
@@ -404,7 +469,7 @@ def plot_results(data):
     ax.set_ylabel("Fraction of erroneous calls by type")
     ax.set_xticklabels(labels, rotation=45, horizontalalignment='left')
      # ax.set_xticks([x+0.3 for x in xlocs])
-    ax.legend(loc='center right', fontsize='small')
+    ax.legend(loc='right', fontsize='small')
 
     plt.tight_layout()
     plt.savefig("calls.png", dpi=200)
@@ -549,11 +614,12 @@ if __name__=="__main__":
 
     ops = [
 
-        #Tabelize(),
+        Tabelize(),
         #NormBreakFinder(),
         #VAPFailsVgraphHits(),
         #GraphCompMismatches(),
-        CallerSummary(),
-        #CallerSummaryBySize(range(1, 120, 25)),
+        #CallerSummary(),
+        #CallerSummaryBySize(range(1, 151, 10)),
+        #AccuracyBySoftclip()
     ]
     main(sys.argv[1], ops)

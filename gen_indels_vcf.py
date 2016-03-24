@@ -33,7 +33,7 @@ def gen_deletion(ref, chr, location, size):
     return "\t".join([chr, str(location+1), ".", ref_bases, alt])
 
 def gen_duplication(ref, chr, location, size):
-    ref_bases = ref.fetch(chr, location, location+size+1)
+    ref_bases = ref.fetch(chr, location, location+size)
     alt = ref_bases + ref_bases
     return "\t".join([chr, str(location+1), ".", ref_bases, alt])
 
@@ -59,7 +59,7 @@ def gen_blocksub(ref, chr, location, size):
     :param size:
     :return:
     """
-    ref_bases = ref.fetch(chr, location, location+size+1)
+    ref_bases = ref.fetch(chr, location, location+size)
     alt = ""
     for b in ref_bases:
         a = random.choice(bases)
@@ -101,18 +101,18 @@ def pick_location(regions, blacklist=None, min_safe_dist = 1000):
 
 
 def generate_all(ref, regions, output):
-    reps_per_size = 20
+    reps_per_size = 100
     repeats = 1
     blacklist = defaultdict(intervaltree.IntervalTree)
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
-        for size in range(1, 121, 10):
+        for size in [1] + range(5, 150, 5):
             loc = pick_location(regions, blacklist)
             #var = gen_deletion(ref, loc[0], loc[1], size)
             #var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
-            #var = gen_insertion(ref, loc[0], loc[1], size)
+            #svar = gen_insertion(ref, loc[0], loc[1], size)
             # var = gen_snp(ref, loc[0], loc[1], size)
             #var = gen_duplication(ref, loc[0], loc[1], size)
             var = gen_blocksub(ref, loc[0], loc[1], size)
