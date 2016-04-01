@@ -37,7 +37,7 @@ def normalize_vap_leftalign(orig_vcf, conf):
     except:
         pass
 
-    cmd = "java -Djava.io.tmpdir=. -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T LeftAlignAndTrimVariants " + no_et + " -R " + conf.get('main', 'ref_genome') + " -V " + tmp_vcf + " -o " + final_vcf
+    cmd = "java -Djava.io.tmpdir=. -Xmx1g -jar " + conf.get('main', 'gatk_path') + " -T LeftAlignAndTrimVariants " + no_et + " -R " + conf.get('main', 'ref_genome') + " -U ALLOW_SEQ_DICT_INCOMPATIBILITY -V " + tmp_vcf + " -o " + final_vcf
     subprocess.check_output(cmd, shell=True)
     err.close()
 

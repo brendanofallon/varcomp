@@ -57,7 +57,7 @@ def call_variant_gatk_hc(bam, orig_genome_path, bed, conf=None):
         no_et = " -et NO_ET -K " + conf.get('main', 'gatk_no_et')
     except:
         pass
-    cmd="java -Xmx1g -Djava.io.tmpdir=. -jar " + conf.get('main', 'gatk_path') + " -T HaplotypeCaller " + no_et + " -R " + orig_genome_path +" -I " + bam + " -L " + bed + " -o " + vcfoutput
+    cmd="java -Xmx1g -Djava.io.tmpdir=. -jar " + conf.get('main', 'gatk_path') + " -T HaplotypeCaller " + no_et + " -R " + orig_genome_path +" -I " + bam + " -U ALLOW_SEQ_DICT_INCOMPATIBILITY -L " + bed + " -o " + vcfoutput
     subprocess.check_output(cmd, shell=True, stderr=err)
     err.close()
     return util.compress_vcf(vcfoutput, conf)
