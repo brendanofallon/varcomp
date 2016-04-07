@@ -108,14 +108,14 @@ def generate_all(ref, regions, output):
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
-        for size in [1] + range(5, 150, 5):
+        for size in [1] + range(1, 80, 10):
             loc = pick_location(regions, blacklist)
-            #var = gen_deletion(ref, loc[0], loc[1], size)
+            var = gen_deletion(ref, loc[0], loc[1], size)
             #var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
-            #svar = gen_insertion(ref, loc[0], loc[1], size)
+            #var = gen_insertion(ref, loc[0], loc[1], size)
             # var = gen_snp(ref, loc[0], loc[1], size)
-            #var = gen_duplication(ref, loc[0], loc[1], size)
-            var = gen_blocksub(ref, loc[0], loc[1], size)
+            # var = gen_duplication(ref, loc[0], loc[1], size)
+            #var = gen_blocksub(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
             for _ in range(repeats):
                 output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")

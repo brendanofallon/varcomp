@@ -282,7 +282,7 @@ class CallerSummaryBySize(object):
         #      plot_callers_line(self.ins_summary, [str(x) for x in self.breaks + [str(self.breaks[-1]) + "+" ]])
         # else:
 
-        plot_callers_line(self.ins_summary, [str(x) for x in self.breaks + [str(self.breaks[-1]) + "+" ]])
+        plot_callers_line(self.del_summary, [str(x) for x in self.breaks + [str(self.breaks[-1]) + "+" ]])
 
 
 class AccuracyBySoftclip(object):

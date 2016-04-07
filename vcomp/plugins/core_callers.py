@@ -35,7 +35,8 @@ def call_variant_fb_minrepeatentropy(bam, orig_genome_path, bed, conf=None):
     vcfoutput = "output-fb.vcf"
     cmd=[conf.get('main', 'freebayes_path'), "-f", orig_genome_path, "--no-partial-observations", "--min-repeat-entropy", "1", "-t", bed, "-b", bam, "-v", vcfoutput]
     subprocess.check_output(cmd)
-    return util.compress_vcf(vcfoutput, conf)
+    sorted_vcf = util.sort_vcf(vcfoutput, conf)
+    return util.compress_vcf(sorted_vcf, conf)
 
 
 def call_variant_platypus(bam, orig_genome_path, bed, conf=None):

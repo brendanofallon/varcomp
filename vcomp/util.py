@@ -89,7 +89,7 @@ def pysamVar_to_Variant(pvar, default_gt):
         gt = pvar.samples[0]['GT']
         alleles = [pvar.ref]
         alleles.extend(pvar.alts)
-        gt = "/".join([str(alleles[g]) for g in gt])
+        gt = "/".join([str(alleles.index(g)) for g in gt])
     except:
 
         if default_gt is None:

@@ -108,7 +108,7 @@ class VariantProcessor(object):
                         logging.info("Running comparator " + comparator_name + " (normalizer " + normalizer_name + ")")
                         for region, result in zip(util.read_regions(bed), single_results):
                             match_vars = util.find_matching_var(orig_vcf, region)
-                            if len(match_vars)==0:
+                            if len(match_vars) == 0:
                                 raise ValueError('Unable to find original variant from region ' + str(region))
 
                             result = compare_single_var(result, region, normed_orig_vcf, normed_caller_vcf, comparator, "/".join([str(i) for i in match_vars[0].samples[0]['GT']]), conf)
