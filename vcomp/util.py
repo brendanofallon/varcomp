@@ -1,4 +1,3 @@
-
 import subprocess
 import os
 import random
@@ -17,36 +16,39 @@ ALL_HOMREF_GTS = ["0/0", "0|0"]
 ALL_HET_GTS = ["0/1", "1/0", "1|0", "0|1"]
 ALL_HOMALT_GTS = ["1/1", "1|1"]
 
-DEFAULT_CONTIG_ORDER=['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3', '4', '5', '6', '7', '8','9', 'MT', 'X','Y']
+DEFAULT_CONTIG_ORDER = ['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3',
+                        '4', '5', '6', '7', '8', '9', 'MT', 'X', 'Y']
 
 Variant = namedtuple('Variant', ['chrom', 'start', 'ref', 'alts', 'gt'])
 ErrorVariant = namedtuple('ErrorVariant', ['chrom', 'start', 'msg'])
 
-def var_comp(v1, v2):
+
+def var_comp(v1, v2, contig_list=DEFAULT_CONTIG_ORDER):
     """
     Comparator for two tokenized VCF lines - chromosome first (according to DEFAULT_CONTIG_ORDER), then position
-    :param v1:
-    :param v2:
-    :return:
+    :param v1: First variant
+    :param v2: Second variant
+    :return: Sorting key
     """
-    v1c = DEFAULT_CONTIG_ORDER.index(v1[0])
-    v2c = DEFAULT_CONTIG_ORDER.index(v2[0])
+    v1c = contig_list.index(v1[0])
+    v2c = contig_list.index(v2[0])
     if v1c == v2c:
         return int(v1[1]) - int(v2[1])
     else:
         return v1c - v2c
 
-def variant_comp(v1, v2):
+
+def variant_comp(v1, v2, contig_list=DEFAULT_CONTIG_ORDER):
     """
-    Adapter tomake var_comp sorter compatible with actual variants
-    :param v1:
-    :param v2:
-    :return:
+    Adapter to make var_comp sorter compatible with actual VCF variants
+    :param v1: First variant
+    :param v2: Second variant
+    :return: Sorting key
     """
-    return var_comp( (v1.chrom, v1.start), (v2.chrom, v2.start) )
+    return var_comp((v1.chrom, v1.start), (v2.chrom, v2.start), contig_list=contig_list)
+
 
 def sort_vcf(vcf, conf):
-
     tmpfile = vcf.replace(".vcf", ".sort" + randstr() + ".vcf").replace(".gz", "")
     vars = []
     ofh = open(tmpfile, "w")
@@ -56,10 +58,10 @@ def sort_vcf(vcf, conf):
         fh = open(vcf)
 
     for line in fh.readlines():
-         if len(line)>0 and line[0]=='#':
-             ofh.write(line)
-         else:
-             vars.append(line.split('\t'))
+        if len(line) > 0 and line[0] == '#':
+            ofh.write(line)
+        else:
+            vars.append(line.split('\t'))
     for var in sorted(vars, cmp=var_comp):
         ofh.write('\t'.join(var))
 
@@ -67,8 +69,11 @@ def sort_vcf(vcf, conf):
     fh.close()
     return bgz_tabix(tmpfile, conf)
 
+
 def randstr(length=8):
-    return "".join([random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(length)])
+    return "".join(
+        [random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(length)])
+
 
 def bgz_tabix(path, conf):
     """
@@ -84,6 +89,7 @@ def bgz_tabix(path, conf):
     subprocess.check_call(cmd.split())
     return path
 
+
 def pysamVar_to_Variant(pvar, default_gt):
     try:
         gt = pvar.samples[0]['GT']
@@ -95,9 +101,9 @@ def pysamVar_to_Variant(pvar, default_gt):
         if default_gt is None:
             raise ValueError('No default GT specified, and variant does not contain GT information: ' + str(pvar))
 
-        #Special case, if default_gt is "0/1" or "0|1", and there are multiple alts, assume we want
-        #het-alt case
-        if default_gt in ALL_HET_GTS and len(pvar.alts)==2:
+        # Special case, if default_gt is "0/1" or "0|1", and there are multiple alts, assume we want
+        # het-alt case
+        if default_gt in ALL_HET_GTS and len(pvar.alts) == 2:
             gt = "1|2"
         else:
             gt = default_gt
@@ -116,27 +122,27 @@ def set_genotypes(orig_vcf, newGT, region, conf):
         fh = open(orig_vcf, "r")
 
     newvcf = orig_vcf.replace(".vcf", ".gtmod" + randstr() + ".vcf").replace(".gz", "")
-    ofh =open(newvcf, "w")
+    ofh = open(newvcf, "w")
     for line in fh.readlines():
-        if len(line)==0 or line[0]=='#':
+        if len(line) == 0 or line[0] == '#':
             ofh.write(line)
         else:
             toks = line.split('\t')
             chr = toks[0]
             start = int(toks[1])
 
-            if region is not None and (chr != region.chr or start<region.start or start>=region.end):
+            if region is not None and (chr != region.chr or start < region.start or start >= region.end):
                 ofh.write(line)
                 continue
 
-            if len(toks)<10:
+            if len(toks) < 10:
                 ofh.write(line)
             else:
                 if "," in toks[4]:
                     raise GTModException('Cant set GT for multi-alt variants.')
                 infoitems = [newGT]
                 if ':' in toks[9]:
-                    infoitems.extend(toks[9].strip().split(':')[1:] )
+                    infoitems.extend(toks[9].strip().split(':')[1:])
                 newinfo = ":".join(infoitems)
                 ofh.write('\t'.join(toks[0:9] + [newinfo]) + "\n")
     fh.close()
@@ -144,13 +150,14 @@ def set_genotypes(orig_vcf, newGT, region, conf):
     bgz_vcf = bgz_tabix(newvcf, conf)
     return bgz_vcf
 
-class GTModException(Exception):
 
+class GTModException(Exception):
     def __init__(self, msg=None):
         self.msg = msg
 
     def __str__(self):
         return "GT modification exception: " + self.msg
+
 
 def region_to_bedfile(region):
     """
@@ -162,6 +169,7 @@ def region_to_bedfile(region):
     with open(filename, "w") as fh:
         fh.write("\t".join([region.chr, str(region.start), str(region.end)]) + "\n")
     return filename
+
 
 def vars_to_bed(variants, window=500):
     """
@@ -176,19 +184,20 @@ def vars_to_bed(variants, window=500):
     with open(bedfilename, "w") as bfh:
         for vset in variants:
             var = vset['vars'][0]
-            bfh.write("\t".join([var.chrom, str(var.start-window), str(var.start+window)]) + "\n")
+            bfh.write("\t".join([var.chrom, str(var.start - window), str(var.start + window)]) + "\n")
 
     return bedfilename
 
+
 def read_regions(bedfile):
     """
-    Generator for iterating over
-    :param bedfile:
-    :return:
+    Generator for creating / iterating over Regions in a BED file
+    :param bedfile: Path to .BED formatted file to read
+    :return: generator yielding Regions for each line in input file
     """
     Region = namedtuple('Region', ['chr', 'start', 'end'])
     for line in open(bedfile).readlines():
-        if len(line)==0 or line[0]=='#':
+        if len(line) == 0 or line[0] == '#':
             continue
         toks = line.split('\t')
         yield Region(toks[0], int(toks[1]), int(toks[2]))
@@ -204,10 +213,11 @@ def is_empty(vcf):
     else:
         fh = open(vcf)
     for line in fh.readlines():
-        if len(line)>0 and line[0] != '#':
+        if len(line) > 0 and line[0] != '#':
             fh.close()
             return False
     return True
+
 
 def find_matching_var(vars, region):
     """
@@ -219,19 +229,24 @@ def find_matching_var(vars, region):
     """
     if type(vars) == str:
         with pysam.VariantFile(vars) as vfile:
-            matches = [var for var in vfile if var.chrom==region.chr and var.start >= region.start and var.start <= region.end]
+            matches = [var for var in vfile if
+                       var.chrom == region.chr and var.start >= region.start and var.start <= region.end]
     else:
-        matches = [var for var in vars if var.chrom==region.chr and var.start >= region.start and var.start <= region.end]
+        matches = [var for var in vars if
+                   var.chrom == region.chr and var.start >= region.start and var.start <= region.end]
     return matches
 
+
 def gen_snp(chrom, pos, gt, ref_genome):
-    currentbase = ref_genome.fetch(chrom, pos, pos+1)
+    """
+    Generate a randomly chosen SNP variant at the given position
+    """
+    currentbase = ref_genome.fetch(chrom, pos, pos + 1)
     bases = ['A', 'C', 'G', 'T']
     bases.remove(currentbase)
     newbase = random.choice(bases)
     newvar = Variant(chrom, pos, currentbase, (newbase,), gt)
     return newvar
-
 
 
 def write_vcf(variants, filename, conf):
@@ -241,7 +256,6 @@ def write_vcf(variants, filename, conf):
     :param filename: Destination filename of vcf to write
     :param conf: Configuration (needed for paths to tabix, bgzip)
     :param gt: Genotype field
-    :return:
     """
     fh = open(filename, "w")
     fh.write("##fileformat=VCFv4.1\n")
@@ -249,7 +263,7 @@ def write_vcf(variants, filename, conf):
     fh.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for variant in sorted(variants, cmp=variant_comp):
         fh.write(variant.chrom + "\t")
-        fh.write(str(variant.start+1) + "\t") #Remember - internally 0-based coords, but in vcf 1-based
+        fh.write(str(variant.start + 1) + "\t")  # Remember - internally 0-based coords, but in vcf 1-based
         fh.write("." + "\t")
         fh.write(variant.ref + "\t")
         fh.write(",".join(variant.alts) + "\t")
@@ -287,22 +301,22 @@ def get_first_gt(var):
     if 'GT' not in sample:
         return None
     gts = sample['GT']
-    refcount = len([g for g in gts if g==0])
-    altcount = len(gts)-refcount
-    alt_types = set([g for g in gts if g!=0])
+    refcount = len([g for g in gts if g == 0])
+    altcount = len(gts) - refcount
+    alt_types = set([g for g in gts if g != 0])
 
-    if len(alt_types)==0: #GT is like 0
+    if len(alt_types) == 0:  # GT is like 0
         return HOM_REF_GT
 
-    if len(alt_types)==1: #GT is like 0/1 or 1/1 or 0/2
-        if altcount==0:
+    if len(alt_types) == 1:  # GT is like 0/1 or 1/1 or 0/2
+        if altcount == 0:
             return HOM_REF_GT
-        if refcount==1 and altcount==1:
+        if refcount == 1 and altcount == 1:
             return HET_GT
         return HOM_ALT_GT
 
-    if len(alt_types)>1: #GT is like 1/2 or 0/1/2...
-        if refcount==0:
+    if len(alt_types) > 1:  # GT is like 1/2 or 0/1/2...
+        if refcount == 0:
             return HET_NONREF
         else:
             return HET_WITHREF
@@ -317,12 +331,13 @@ def canadd(var, batch, max_batch_size, min_safe_dist=2000):
     :param min_safe_dist: Minimum distance required between variants in the batch
     :return:
     """
-    if len(batch)>=max_batch_size:
+    if len(batch) >= max_batch_size:
         return False
     for b in batch:
-        if var.chrom == b.chrom and abs(b.start - var.start)<min_safe_dist:
+        if var.chrom == b.chrom and abs(b.start - var.start) < min_safe_dist:
             return False
     return True
+
 
 def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
     """
@@ -352,9 +367,9 @@ def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
     name = os.path.split(vcf)[-1].strip('.gz').strip('.vcf')
     vars = list(pysam.VariantFile(vcf))
 
-    while len(vars)>0:
+    while len(vars) > 0:
         var = vars.pop(0)
-        unfilled_batches = [b for b in batches if len(b)<max_batch_size]
+        unfilled_batches = [b for b in batches if len(b) < max_batch_size]
         found = False
         for b in unfilled_batches:
             if canadd(var, b, max_batch_size, min_safe_dist=min_safe_dist):
@@ -363,12 +378,12 @@ def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
                 break
 
         if not found:
-            #Need to make a new batch for this variant, it doesn't fit anywhere
+            # Need to make a new batch for this variant, it doesn't fit anywhere
             batch = []
             batch.append(var)
             batches.append(batch)
 
-    #return batches
+    # return batches
     files = []
     for i, batch in enumerate(batches):
         batchname = '{0}.batch{1}.'.format(name, i) + randstr() + ".vcf"
@@ -379,6 +394,3 @@ def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
                 out.write(str(x))
         files.append(batchname)
     return files
-
-
-
