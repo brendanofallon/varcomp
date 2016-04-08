@@ -1,6 +1,6 @@
 
 import subprocess
-import gzip
+import os
 import random
 import string
 from collections import namedtuple
@@ -328,14 +328,13 @@ def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
     """
     Given a list of variants, group them into batches such that no batch contains two variants
     whose start positions are within min_safe_dist bases of each other
-    :param vcf: VCF file containing variants to batch
+    :param vcf: Filename of VCF file containing variants to batch
     :param max_batch_size: Maximum number of variants per batch
     :param min_safe_dist: Min permissible distance between two variants in batch
     :return: List of VCF files containing subsets of variants
     """
 
     batches = []
-    #vars = list(vars)
     header = []
     if vcf.endswith('.gz'):
         for x in gzip.open(vcf):
@@ -349,7 +348,8 @@ def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
                 header.append(x)
             else:
                 break
-    name = vcf.split('/')[-1].strip('.gz').strip('.vcf')
+
+    name = os.path.split(vcf)[-1].strip('.gz').strip('.vcf')
     vars = list(pysam.VariantFile(vcf))
 
     while len(vars)>0:
