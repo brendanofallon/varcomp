@@ -14,8 +14,8 @@ def get_comparators():
     return {
         "raw": compare_raw,
         "vgraph": compare_vgraph,
-        "vcfeval": compare_vcfeval,
-        "happy": compare_happy
+        #"vcfeval": compare_vcfeval,
+        #"happy": compare_happy
     }
 
 def compare_raw(orig_vcf, caller_vcf, bed, conf):

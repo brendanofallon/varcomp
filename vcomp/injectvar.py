@@ -147,24 +147,23 @@ def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None,
             nfq.append( os.path.abspath(fq))
         fqs = nfq
 
-    processor = bp.VariantProcessor(variant_callers, normalizers, comparators, JsonReporter(output))
+    processor = bp.VariantProcessor(variant_callers, normalizers, comparators, JsonReporter(output), conf)
     logging.info("Processing variants in file " + vcf)
     if single_batch:
         logging.info("Processing all variants as one batch")
-        processor.process_batch(vcf, vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
+        processor.process_batch(vcf, vcf.replace(".vcf", "-tmpfiles"), gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
     else:
         batches = util.batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000)
         for batchnum, batch_vcf in enumerate(batches):
             logging.info("Processing batch #" + str(batchnum+1) + " of " + str(len(batches)))
-            processor.process_batch(batch_vcf, vcf.replace(".vcf", "-tmpfiles"), conf, gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
+            processor.process_batch(batch_vcf, vcf.replace(".vcf", "-tmpfiles"), gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
             os.remove(batch_vcf)
 
 
 def main(args):
-    """
+    """s
     Respond to command line args, check for basic config errors, and perform analyses
     :param args:
-    :return:
     """
     conf = cp.SafeConfigParser()
     conf.read(args.conf)

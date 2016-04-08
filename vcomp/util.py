@@ -5,6 +5,7 @@ import string
 from collections import namedtuple
 import pysam
 import gzip
+import traceback as tb
 
 HOM_REF_GT = "Hom ref."
 HET_GT = "Het"
@@ -394,3 +395,47 @@ def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
                 out.write(str(x))
         files.append(batchname)
     return files
+
+
+class TempDir:
+    """
+    On entry, create a new temporary directory and chdir into it. Move back to the original dir on exit.
+    If any exceptions are encountered, try to write them to a file in the temporary directory.
+    """
+
+    ALWAYS_DELETE = "always delete"
+    DELETE_NO_EXCEPTION = "delete no exception"
+    NEVER_DELETE = "never delete"
+
+    DELETION_POLICIES = [ALWAYS_DELETE, DELETE_NO_EXCEPTION, NEVER_DELETE]
+
+    def __init__(self, dirname=None, del_policy=DELETE_NO_EXCEPTION):
+        if dirname is None:
+            self.dirname = "tmp-working-" + randstr()
+        else:
+            self.dirname = dirname
+        self.origdir = None
+        self.deletion_policy = del_policy
+        if not del_policy in TempDir.DELETION_POLICIES:
+            raise ValueError('Unrecognized deletion policy: ' + str(del_policy))
+
+    def __enter__(self):
+        self.origdir = os.getcwd()
+        try:
+            os.mkdir(self.dirname)
+        except:
+            pass
+        os.chdir(self.dirname)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            try:
+                with open("exception.info.txt", "a") as fh:
+                    tb.print_tb(exc_tb, file=fh)
+                    fh.write(str(exc_type) + " : " + str(exc_val) + "\n")
+            except:
+                pass
+        os.chdir(self.origdir)
+        if self.deletion_policy == TempDir.ALWAYS_DELETE \
+                or (self.deletion_policy == TempDir.DELETE_NO_EXCEPTION and exc_val is None):
+            os.system("rm -rf " + self.dirname)
