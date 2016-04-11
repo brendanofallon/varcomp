@@ -12,7 +12,7 @@ ALLELE_EXTRA="Additional variants identified"
 
 def get_comparators():
     return {
-        "raw": compare_raw,
+        #"raw": compare_raw,
         "vgraph": compare_vgraph,
         #"vcfeval": compare_vcfeval,
         #"happy": compare_happy

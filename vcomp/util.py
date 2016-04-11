@@ -183,11 +183,33 @@ def vars_to_bed(variants, window=500):
     """
     bedfilename = "var_regions" + randstr() + ".bed"
     with open(bedfilename, "w") as bfh:
-        for vset in variants:
-            var = vset['vars'][0]
+        for item in variants:
+            if type(item) == dict:
+                var = item['vars'][0]
+            else:
+                var = item
             bfh.write("\t".join([var.chrom, str(var.start - window), str(var.start + window)]) + "\n")
 
     return bedfilename
+
+def remove_halfcalls(vcf):
+    """
+    Create a new VCF file by removing all half-called variants from the original vcf file
+    """
+    newvcf = vcf.replace(".vcf", ".nohalfcalls.vcf")
+    cmd = "grep '^#' " + vcf + " > " + newvcf
+    subprocess.check_call(cmd, shell=True)
+    with open(newvcf, "aw") as ofh:
+        for var in pysam.VariantFile(vcf):
+            include = True
+            if len(var.samples) > 0:
+                sample = var.samples[0]
+                if None in sample['GT']:
+                    include = False
+            if include:
+                ofh.write(str(var))
+    ofh.close()
+    return newvcf
 
 
 def read_regions(bedfile):

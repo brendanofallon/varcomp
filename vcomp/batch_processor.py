@@ -29,16 +29,6 @@ class VariantProcessor(object):
         self.reporter = output_reporter
         self.conf = conf
 
-    def process(self, vcf, batchname, conf, gt_policy, ex_snp=None, keep_tmpdir=False, read_depth=250, reads=None):
-        pass
-        #make temp dir
-        #Create sets and write input VCF
-        #Generate target regions BED
-        #Generate BAM file
-        #Run callers, result is dict of caller -> sorted, zipped VCF
-        #Compute BAM stats and variant quality for each region in target bed
-        #Normalize input vars & caller vars, for each caller / normalizer combo run comparator
-
     def create_input_vcf(self, raw_vars, ex_snp, gt_policy):
         ref_path = self.conf.get('main', 'ref_genome')
         variant_sets = create_variant_sets(raw_vars, ex_snp, gt_policy, pysam.FastaFile(ref_path))
@@ -83,7 +73,7 @@ class VariantProcessor(object):
         var_quals = defaultdict(dict)
         for region in util.read_regions(bed):
             key = var_key(util.find_matching_var(orig_vcf, region))
-            for caller in self.callers:
+            for caller in caller_vars:
                 # Avoid pysam bug with empty vcfs
                 if util.is_empty(caller_vars[caller]):
                     var_quals[key][caller] = MISSING_QUAL
@@ -106,7 +96,12 @@ class VariantProcessor(object):
         """
         raw_vars = list(pysam.VariantFile(vcf))
 
-        with util.TempDir(del_policy=util.TempDir.DELETE_NO_EXCEPTION):
+        tmpdir_del_policy = util.TempDir.DELETE_NO_EXCEPTION
+        if keep_tmpdir:
+            tmpdir_del_policy = util.TempDir.NEVER_DELETE
+
+        tmp_dirname = batchname + "-" + util.randstr()
+        with util.TempDir(dirname=tmp_dirname, del_policy=tmpdir_del_policy):
             ref_path = self.conf.get('main', 'ref_genome')
             var_results = defaultdict(dict)
 
@@ -115,6 +110,7 @@ class VariantProcessor(object):
             if reads is None:
                 reads = bam_simulation.gen_alt_fq(ref_path, variant_sets, read_depth)
             bam = bam_simulation.gen_alt_bam(ref_path, self.conf, reads)
+
             caller_variants = self.call_variants(bam, bed)
             bam_stats = self.collect_bam_stats(bam, bed, orig_vcf)
             var_quals = self.collect_var_quals(caller_variants, bed, orig_vcf)
@@ -147,6 +143,50 @@ class VariantProcessor(object):
             #Iterate over all results and write to standard output. We do this here instead of within the loops above
             #because it keeps results organized by variant, which makes them easier to look at
             self.reporter.write_output(var_results, var_quals, bam_stats)
+
+    def compare_test_vcf(self, raw_orig_vcf, raw_test_vcf):
+
+        raw_orig_vcf = os.path.abspath(raw_orig_vcf)
+        raw_test_vcf = os.path.abspath(raw_test_vcf)
+        orig_vars = list(pysam.VariantFile(raw_orig_vcf))
+        tmp_dirname = raw_test_vcf.replace(".gz", "").replace(".vcf", "") + "-vcomp-" + util.randstr()
+        with util.TempDir(dirname=tmp_dirname):
+            orig_vcf = util.bgz_tabix(raw_orig_vcf, self.conf)
+            test_vcf = util.bgz_tabix(raw_test_vcf, self.conf)
+            caller_name = test_vcf.replace(".gz", "").replace(".vcf", "")
+            bed = util.vars_to_bed(orig_vars)
+            var_results = defaultdict(dict)
+            var_quals = self.collect_var_quals({caller_name: test_vcf}, bed, orig_vcf)
+            bamstats = defaultdict(dict)
+            for normalizer_name, normalizer in self.normalizers.iteritems():
+                logging.info("Running normalizer " + normalizer_name)
+                normed_orig_vcf = normalizer(orig_vcf, self.conf)
+                normed_caller_vcf = normalizer(test_vcf, self.conf)
+
+                for comparator_name, comparator in self.comparators.iteritems():
+                    logging.info("Running comparator " + comparator_name + " (normalizer " + normalizer_name + ")")
+                    all_results = comparator(normed_orig_vcf, normed_caller_vcf, None, self.conf)
+                    single_results = split_results(all_results, bed)
+                    for region, result in zip(util.read_regions(bed), single_results):
+                        match_vars = util.find_matching_var(orig_vcf, region)
+                        if len(match_vars) == 0:
+                            raise ValueError('Unable to find original variant from region ' + str(region))
+                        result = compare_single_var(result,
+                                                    region,
+                                                    normed_orig_vcf,
+                                                    normed_caller_vcf,
+                                                    comparator,
+                                                    "/".join([str(i) for i in match_vars[0].samples[0]['GT']]),
+                                                    self.conf)
+                        key = var_key(match_vars)
+                        if caller_name not in var_results[key]:
+                            var_results[key][caller_name] = defaultdict(dict)
+                        var_results[key][caller_name][normalizer_name][comparator_name] = result
+                        bamstats[key] = {}
+        # Iterate over all results and write to standard output. We do this here instead of within the loops above
+        # because it keeps results organized by variant, which makes them easier to look at
+        self.reporter.write_output(var_results, var_quals, bamstats)
+
 
 def find_qual(vars):
     qual = MISSING_QUAL

@@ -101,20 +101,20 @@ def pick_location(regions, blacklist=None, min_safe_dist = 1000):
 
 
 def generate_all(ref, regions, output):
-    reps_per_size = 100
+    reps_per_size = 10
     repeats = 1
     blacklist = defaultdict(intervaltree.IntervalTree)
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
-        for size in [1] + range(1, 80, 10):
+        for size in [1,2,3,4,5] + range(10, 120, 10):
             loc = pick_location(regions, blacklist)
-            var = gen_deletion(ref, loc[0], loc[1], size)
+            #var = gen_deletion(ref, loc[0], loc[1], size)
             #var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
             #var = gen_insertion(ref, loc[0], loc[1], size)
             # var = gen_snp(ref, loc[0], loc[1], size)
-            # var = gen_duplication(ref, loc[0], loc[1], size)
+            var = gen_duplication(ref, loc[0], loc[1], size)
             #var = gen_blocksub(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
             for _ in range(repeats):
