@@ -181,6 +181,7 @@ def gen_alt_fq(ref_path, variant_sets, read_count, dest_prefix="input"):
     reads2 = dest_prefix + "_R2.fq"
     read1_fh = open(reads1, "w")
     read2_fh = open(reads2, "w")
+    read_count = int(read_count * 1.25)  # Make sure depth in IGV is about whatever read_count is
     for vset in variant_sets:
         chrom = vset['vars'][0].chrom
         hap1, hap2 = collect_alts(vset)

@@ -244,7 +244,7 @@ if __name__=="__main__":
     parser.add_argument("-b", "--batch", help="Treat each input VCF file as a single batch (default False)", action='store_true')
     parser.add_argument("-s", "--seed", help="Random seed", default=None)
     parser.add_argument("-o", "--output", help="Output destination", default=sys.stdout)
-    parser.add_argument("-r", "--readdepth", help="Number of reads to generate per variant", default=250, type=int)
+    parser.add_argument("-r", "--readdepth", help="Number of reads to generate per variant", default=200, type=int)
     parser.add_argument("-a", "--addsnp", help="Add a SNP upstream of each variant", action='store_true')
     parser.add_argument("-t", "--trans", help="If SNP is added, add it in trans (default cis)", action='store_true')
     parser.add_argument("--snphom", help="Added SNPs are homozygous (default het)", action='store_true')
