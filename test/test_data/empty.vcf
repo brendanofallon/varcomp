@@ -1,0 +1,13 @@
+##fileformat=VCFv4.1
+##fileDate=20160411
+##fileEncoding=UTF-8
+##source=CLC Genomics Workbench 8.5.1 build 20151012143322
+##reference=file:/Users/bofallon/CLC_Data/benchmark/ins-v2/del-v2/dels_batch0%20(Variants).clc
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Total number of filtered reads per sample used by variant caller">
+##FORMAT=<ID=CLCAD2,Number=.,Type=Integer,Description="Allelic depth, number of filtered reads supporting the alleles where the first element represents the reference and subsequent elements represent the alternatives in the order listed in the ALT column">
+##FORMAT=<ID=VF,Number=1,Type=Float,Description="Variant frequency, the percentage of reads supporting the alternate allele">
+##FORMAT=<ID=AD,Number=.,Type=Integer,Description="Allelic depth, unfiltered count of all reads">
+##FORMAT=<ID=AO,Number=A,Type=Integer,Description="Alternate allele observation count">
+##FORMAT=<ID=RO,Number=1,Type=Integer,Description="Reference allele observation count">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	dels_batch0 (Variants)

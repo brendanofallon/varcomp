@@ -32,6 +32,12 @@ LABEL_SUBS = {
     batch_processor.MATCH_RESULT: "Match",
 }
 
+def sub_callername(name):
+    if ".merged.nohalfcalls" in name:
+        return "clcbio"
+    else:
+        return name
+
 class Tabelize(object):
     """
     Writes tab-delimited results in table form to sys.stdout
@@ -48,8 +54,17 @@ class Tabelize(object):
             qual = results[QUALS][caller]
             for normalizer, norm_results in caller_results.iteritems():
                 for comparator, comp_results in norm_results.iteritems():
-                    totreads = results[BAMSTATS]['total_reads']
-                    pp = results[BAMSTATS]['properpair']
+
+                    if 'total_reads' in results[BAMSTATS]:
+                        totreads = results[BAMSTATS]['total_reads']
+                    else:
+                        totreads = 0
+
+                    if 'properpair' in results[BAMSTATS]:
+                        pp = results[BAMSTATS]['properpair']
+                    else:
+                        pp = 0
+
                     if 'mq20' in results[BAMSTATS]:
                         mq20 = results[BAMSTATS]['mq20']
                     else:
@@ -63,8 +78,12 @@ class Tabelize(object):
                     else:
                         screads = 0
 
-                    scbases = results[BAMSTATS]['softclipped_bases']
+                    if 'softclipped_bases' in results[BAMSTATS]:
+                        scbases = results[BAMSTATS]['softclipped_bases']
+                    else:
+                        scbases = 0
 
+                    caller = sub_callername(caller)
                     print "\t".join([var, str(qual), str(totreads), str(pp), str(mq20), str(mq40), str(screads), str(scbases), caller, normalizer, comparator, comp_results])
 
     def finalize(self):
@@ -585,21 +604,23 @@ def get_vartype(varstr):
         return "Deletion (" + sizebin(len(ref)-len(alt)) + ")"
     return "MNP " + sizebin( len(ref))
 
-def main(path, operations=[]):
+def main(paths, operations=[]):
     line_num = 0
-    with open(path) as fh:
-        for line in fh.readlines():
-            line_num += 1
-            if len(line)==0 or line[0] == '#':
-                continue
-            try:
-                results = parseline(line)
-            except Exception as ex:
-                sys.stderr.write("Error parsing line #" + str(line_num) + ": " + str(ex))
-                continue
 
-            for op in operations:
-                op.perform_op(results)
+    for path in paths:
+        with open(path) as fh:
+            for line in fh.readlines():
+                line_num += 1
+                if len(line)==0 or line[0] == '#':
+                    continue
+                try:
+                    results = parseline(line)
+                except Exception as ex:
+                    sys.stderr.write("Error parsing line #" + str(line_num) + ": " + str(ex))
+                    continue
+
+                for op in operations:
+                    op.perform_op(results)
 
 
     for op in operations:
@@ -622,4 +643,4 @@ if __name__=="__main__":
         #CallerSummaryBySize(range(1, 151, 10)),
         #AccuracyBySoftclip()
     ]
-    main(sys.argv[1], ops)
+    main(sys.argv[1:], ops)

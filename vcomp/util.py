@@ -387,7 +387,7 @@ def batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000):
             else:
                 break
 
-    name = os.path.split(vcf)[-1].strip('.gz').strip('.vcf')
+    name = os.path.basename(vcf).strip('.gz').strip('.vcf')
     vars = list(pysam.VariantFile(vcf))
 
     while len(vars) > 0:

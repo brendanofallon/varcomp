@@ -177,8 +177,8 @@ def gen_alt_fq(ref_path, variant_sets, read_count, dest_prefix="input"):
     :param read_count:
     :return:
     """
-    reads1 = dest_prefix + "_r1.fq"
-    reads2 = dest_prefix + "_r2.fq"
+    reads1 = dest_prefix + "_R1.fq"
+    reads2 = dest_prefix + "_R2.fq"
     read1_fh = open(reads1, "w")
     read2_fh = open(reads2, "w")
     for vset in variant_sets:

@@ -156,12 +156,20 @@ def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None,
         batches = util.batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000)
         for batchnum, batch_vcf in enumerate(batches):
             logging.info("Processing batch #" + str(batchnum+1) + " of " + str(len(batches)))
-            processor.process_batch(batch_vcf, vcf.replace(".vcf", "-tmpfiles"), gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
+            processor.process_batch(batch_vcf,  "tmp-{}-batch-{}".format( os.path.basename(vcf).replace(".vcf", ""), batchnum), gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
             os.remove(batch_vcf)
 
+def process_test_vcf(orig_vcf, test_vcf, output, conf):
+    normalizers = core_norms.get_normalizers()
+    normalizers.update(load_components(conf, 'normalizers', 'get_normalizers'))
+
+    comparators = core_comps.get_comparators()
+    comparators.update(load_components(conf, 'comparators', 'get_comparators'))
+    processor = bp.VariantProcessor({}, normalizers, comparators, JsonReporter(output), conf)
+    processor.compare_test_vcf(orig_vcf, test_vcf)
 
 def main(args):
-    """s
+    """
     Respond to command line args, check for basic config errors, and perform analyses
     :param args:
     """
@@ -199,8 +207,20 @@ def main(args):
         vcf = args.vcf[0]
         fastq_prefix = vcf.strip(".gz").strip(".vcf")
         logging.info("Generating reads for vcf file " + vcf)
-        gen_reads(vcf, vcf.strip(".gz").strip(".vcf") + "_final.vcf", fastq_prefix, snp_inf, gt_default, args.readdepth, conf)
-        exit(0)
+        suffix = ".d" + str(args.readdepth)
+        if gt_default == bam_simulation.ALL_HETS:
+            suffix = suffix + ".het"
+        elif gt_default == bam_simulation.ALL_HOMS:
+            suffix = suffix + ".hom"
+        fastq_prefix = fastq_prefix + suffix
+        gen_reads(vcf, vcf.strip(".gz").strip(".vcf") + suffix + ".truth.vcf", fastq_prefix, snp_inf, gt_default, args.readdepth, conf)
+        return
+
+    if args.test_vcf:
+        if len(args.vcf) > 1:
+            raise ValueError('Only one VCF supported for now')
+        process_test_vcf(args.vcf[0], args.test_vcf, args.output, conf)
+        return
 
 
     for vcf in args.vcf:
@@ -233,6 +253,7 @@ if __name__=="__main__":
     parser.add_argument("--callers", help="Comma separated list of variant callers to use (default: use all)", action='append')
     parser.add_argument("--fqs", help="Dont generate fastqs, use these instead (two entries expected)", action='append')
     parser.add_argument("--generate-fqs", help="Generate fastqs only, do not perform any variant calling or comparison", action='store_true')
+    parser.add_argument("--test-vcf", help="Compare an already-called VCF file the input VCF")
     args = parser.parse_args()
 
     main(args)

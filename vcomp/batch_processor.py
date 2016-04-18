@@ -152,12 +152,16 @@ class VariantProcessor(object):
         tmp_dirname = raw_test_vcf.replace(".gz", "").replace(".vcf", "") + "-vcomp-" + util.randstr()
         with util.TempDir(dirname=tmp_dirname):
             orig_vcf = util.bgz_tabix(raw_orig_vcf, self.conf)
-            test_vcf = util.bgz_tabix(raw_test_vcf, self.conf)
+
+            test_vcf = util.remove_halfcalls(raw_test_vcf)
+            test_vcf = util.bgz_tabix(test_vcf, self.conf)
             caller_name = test_vcf.replace(".gz", "").replace(".vcf", "")
             bed = util.vars_to_bed(orig_vars)
             var_results = defaultdict(dict)
             var_quals = self.collect_var_quals({caller_name: test_vcf}, bed, orig_vcf)
             bamstats = defaultdict(dict)
+
+
             for normalizer_name, normalizer in self.normalizers.iteritems():
                 logging.info("Running normalizer " + normalizer_name)
                 normed_orig_vcf = normalizer(orig_vcf, self.conf)
