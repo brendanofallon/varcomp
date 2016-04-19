@@ -176,19 +176,33 @@ def vars_to_bed(variants, window=500):
     """
     Generate a bed file containing regions that span each variant, each region is centered
     on the variant start position and extends 'window' bp in each direction
-    The resulting file is NOT sorted by
+    Nearby variants are merged into the same region.
     :param variants: List of variants to create a bed file for
     :param window:Number of bases to extend (from variant start position) in each direction
     :return: Name of bed file created
     """
     bedfilename = "var_regions" + randstr() + ".bed"
+    cur_chrom = None
+    interval_start = -1
+    interval_end = -1
     with open(bedfilename, "w") as bfh:
         for item in variants:
             if type(item) == dict:
                 var = item['vars'][0]
             else:
                 var = item
-            bfh.write("\t".join([var.chrom, str(var.start - window), str(var.start + window)]) + "\n")
+            if var.chrom == cur_chrom and var.start >= interval_start and (var.start + len(var.ref)) < interval_end:
+                interval_end = var.start + window
+            else:
+                if cur_chrom is not None:
+                    bfh.write("\t".join([cur_chrom, str(interval_start), str(interval_end)]) + "\n")
+                cur_chrom = var.chrom
+                interval_start = var.start - window
+                interval_end = var.start + window
+
+        if cur_chrom is not None:
+            bfh.write("\t".join([cur_chrom, str(interval_start), str(interval_end)]) + "\n")
+
 
     return bedfilename
 
@@ -197,7 +211,7 @@ def remove_halfcalls(vcf):
     Create a new VCF file by removing all half-called variants from the original vcf file
     """
     newvcf = vcf.replace(".vcf", ".nohalfcalls.vcf")
-    cmd = "grep '^#' " + vcf + " > " + newvcf
+    cmd = "zgrep '^#' " + vcf + " > " + newvcf
     subprocess.check_call(cmd, shell=True)
     with open(newvcf, "aw") as ofh:
         for var in pysam.VariantFile(vcf):

@@ -4,7 +4,7 @@ import os
 from collections import namedtuple
 from vcomp import util
 
-MockVariant = namedtuple('MockVariant', ['chrom', 'start', 'end', 'ref', 'alleles', 'samples'])
+MockVariant = namedtuple('MockVariant', ['chrom', 'start', 'ref', 'alleles', 'samples'])
 
 class TestUtils(unittest.TestCase):
 
@@ -54,6 +54,37 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(regions[2].start == 55)
         self.assertTrue(regions[2].end == 77)
 
+    def test_vars_to_bed(self):
+        vars = [
+                MockVariant(chrom='1', start=1000, ref='A', alleles=('G', ), samples=None),
+                MockVariant(chrom='1', start=5000,  ref='A', alleles=('G', ), samples=None),
+                MockVariant(chrom='1', start=5050,  ref='T', alleles=('G', ), samples=None),
+                MockVariant(chrom='2', start=2000, ref='T', alleles=('G',), samples=None),
+                MockVariant(chrom='2', start=2010, ref='T', alleles=('G',), samples=None),
+                MockVariant(chrom='2', start=3000, ref='T', alleles=('G',), samples=None),
+            ]
+
+        bed = util.vars_to_bed(vars, window=500)
+        regions = [r for r in util.read_regions(bed)]
+        self.assertTrue(len(regions)==4)
+        self.assertTrue(regions[0].chr == '1')
+        self.assertTrue(regions[0].start == 500)
+        self.assertTrue(regions[0].end == 1500)
+
+        self.assertTrue(regions[1].chr == '1')
+        self.assertTrue(regions[1].start == 4500)
+        self.assertTrue(regions[1].end == 5550)
+
+        self.assertTrue(regions[2].chr == '2')
+        self.assertTrue(regions[2].start == 1500)
+        self.assertTrue(regions[2].end == 2510)
+
+        self.assertTrue(regions[3].chr == '2')
+        self.assertTrue(regions[3].start == 2500)
+        self.assertTrue(regions[3].end == 3500)
+
+        os.remove(bed)
+
 
     def test_empty_vcf(self):
         empty_vcf = os.path.join(TestUtils.DATA_PATH, TestUtils.EMPTY_VCF)
@@ -62,13 +93,13 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(util.is_empty(empty_vcf))
         self.assertFalse(util.is_empty(non_empty_vcf))
 
-    def test_find_regions(self):
-
-        vars = [
-            MockVariant(chrom='1', start=10, end=20, ref='A', alt='G'),
-            MockVariant(chrom='1', start=10, end=20, ref='A', alt='G'),
-            MockVariant(chrom='1', start=10, end=20, ref='A', alt='G'),
-        ]
+    # def test_find_regions(self):
+    #
+    #     vars = [
+    #         MockVariant(chrom='1', start=10, end=20, ref='A', alt='G'),
+    #         MockVariant(chrom='1', start=10, end=20, ref='A', alt='G'),
+    #         MockVariant(chrom='1', start=10, end=20, ref='A', alt='G'),
+    #     ]
 
 if __name__=="__main__":
     unittest.main()
