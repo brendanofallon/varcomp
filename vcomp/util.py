@@ -17,6 +17,8 @@ ALL_HOMREF_GTS = ["0/0", "0|0"]
 ALL_HET_GTS = ["0/1", "1/0", "1|0", "0|1"]
 ALL_HOMALT_GTS = ["1/1", "1|1"]
 
+VCF_MISSING = "."
+
 DEFAULT_CONTIG_ORDER = ['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3',
                         '4', '5', '6', '7', '8', '9', 'MT', 'X', 'Y']
 
@@ -112,7 +114,7 @@ def pysamVar_to_Variant(pvar, default_gt):
     return Variant(pvar.chrom, pvar.start, pvar.ref, pvar.alts, gt)
 
 
-def set_genotypes(orig_vcf, newGT, region, conf):
+def set_genotypes(orig_vcf, newGT, region, conf, compress_result=True):
     """
     Create a new VCF file that is identical to the given VCF, except that all GT info fields are set to 'newGT'
     """
@@ -141,15 +143,20 @@ def set_genotypes(orig_vcf, newGT, region, conf):
             else:
                 if "," in toks[4]:
                     raise GTModException('Cant set GT for multi-alt variants.')
-                infoitems = [newGT]
+                if toks[4] == VCF_MISSING:
+                    infoitems = ['0']
+                else:
+                    infoitems = [newGT]
                 if ':' in toks[9]:
                     infoitems.extend(toks[9].strip().split(':')[1:])
                 newinfo = ":".join(infoitems)
                 ofh.write('\t'.join(toks[0:9] + [newinfo]) + "\n")
     fh.close()
     ofh.close()
-    bgz_vcf = bgz_tabix(newvcf, conf)
-    return bgz_vcf
+    if compress_result:
+        return bgz_tabix(newvcf, conf)
+    else:
+        return newvcf
 
 
 class GTModException(Exception):
@@ -210,7 +217,7 @@ def remove_halfcalls(vcf):
     """
     Create a new VCF file by removing all half-called variants from the original vcf file
     """
-    newvcf = vcf.replace(".vcf", ".nohalfcalls.vcf")
+    newvcf = os.path.basename(vcf).replace(".vcf", ".nohalfcalls.vcf").replace(".gz", "")
     cmd = "zgrep '^#' " + vcf + " > " + newvcf
     subprocess.check_call(cmd, shell=True)
     with open(newvcf, "aw") as ofh:

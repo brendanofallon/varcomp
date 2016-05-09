@@ -14,6 +14,7 @@ class TestUtils(unittest.TestCase):
     TEST_BED = "test.bed"
     EMPTY_VCF = "empty.vcf"
     NORMAL_VCF = "normal.vcf"
+    COMPLEX_VCF = "morecomplex.vcf"
 
     def test_rm_halfcalls(self):
 
@@ -100,6 +101,35 @@ class TestUtils(unittest.TestCase):
     #         MockVariant(chrom='1', start=10, end=20, ref='A', alt='G'),
     #         MockVariant(chrom='1', start=10, end=20, ref='A', alt='G'),
     #     ]
+
+    def test_gtmod(self):
+        orig_vcf = os.path.join(TestUtils.DATA_PATH, TestUtils.COMPLEX_VCF)
+
+        orig_vars = ["-".join(line.split('\t')[0:5])
+                     for line in open(orig_vcf)
+                     if line[0] != '#']
+
+        mod_vcf = util.set_genotypes(orig_vcf, "0/1", None, None, compress_result=False)
+        new_vars = ["-".join(line.split('\t')[0:5])
+                     for line in open(mod_vcf)
+                     if line[0] != '#']
+
+        self.assertListEqual(orig_vars, new_vars)
+
+        for line in open(mod_vcf):
+            if line[0]=='#':
+                continue
+            else:
+                toks = line.split('\t')
+                alt = toks[4]
+                gt = toks[9].split(":")[0]
+                if alt != util.VCF_MISSING:
+                    self.assertTrue(gt == "0/1")
+                else:
+                    self.assertTrue(gt == "0")
+
+        os.remove(mod_vcf)
+
 
 if __name__=="__main__":
     unittest.main()
