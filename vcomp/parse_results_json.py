@@ -33,7 +33,7 @@ LABEL_SUBS = {
 }
 
 def sub_callername(name):
-    if ".merged.nohalfcalls" in name:
+    if ".merged.nohalfcalls" in name or "clc3" in name:
         return "clcbio"
     else:
         return name

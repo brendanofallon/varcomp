@@ -84,7 +84,7 @@ def gen_del_snp_mnp(ref, chr, location, size):
     alt = ref_bases[0] + random.choice(okbases) + ref_bases[2:]
     return "\t".join([chr, str(location+1), ".", ref_bases, alt + "," + del_alt ])
 
-def pick_location(regions, blacklist=None, min_safe_dist = 1000):
+def pick_location(regions, blacklist=None, min_safe_dist = 2000):
     region = random.choice(regions)
     loc = random.randint(region[1], region[2])
     if blacklist is not None:
@@ -102,22 +102,32 @@ def pick_location(regions, blacklist=None, min_safe_dist = 1000):
 
 def generate_all(ref, regions, output):
     reps_per_size = 10
-    repeats = 1
     blacklist = defaultdict(intervaltree.IntervalTree)
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
     for rep in range(0, reps_per_size):
         for size in [1,2,3,4,5] + range(10, 150, 10):
+            vars = []
             loc = pick_location(regions, blacklist)
-            # var = gen_deletion(ref, loc[0], loc[1], size)
+            vars.append( gen_deletion(ref, loc[0], loc[1], size) )
+
+            loc = pick_location(regions, blacklist)
+            vars.append( gen_insertion(ref, loc[0], loc[1], size) )
+
+            loc = pick_location(regions, blacklist)
+            vars.append(gen_duplication(ref, loc[0], loc[1], size))
+
+            loc = pick_location(regions, blacklist)
+            vars.append(gen_blocksub(ref, loc[0], loc[1], size))
+
             #var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
             # var = gen_insertion(ref, loc[0], loc[1], size)
             # var = gen_snp(ref, loc[0], loc[1], size)
             # var = gen_duplication(ref, loc[0], loc[1], size)
-            var = gen_blocksub(ref, loc[0], loc[1], size)
+            # var = gen_blocksub(ref, loc[0], loc[1], size)
             #var = gen_inverse_dup(ref, loc[0], loc[1], size)
-            for _ in range(repeats):
+            for var in vars:
                 output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")
 
 
