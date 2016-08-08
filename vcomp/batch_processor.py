@@ -254,7 +254,7 @@ def compare_single_var(result, bedregion, orig_vars, caller_vars, comparator, in
     :return:
     """
     result_str = result_from_tuple(result)
-    if result_str == NO_MATCH_RESULT  and (inputgt in util.ALL_HET_GTS or inputgt in util.ALL_HOMALT_GTS):
+    if result_str == NO_MATCH_RESULT and (inputgt in util.ALL_HET_GTS or inputgt in util.ALL_HOMALT_GTS):
         try:
             gt_mod_vars = util.set_genotypes(caller_vars, inputgt, bedregion, conf)
             bedfile = util.region_to_bedfile(bedregion)

@@ -170,7 +170,10 @@ class VAPFailsVgraphHits(object):
             for var, result in self.vap_hits[vartype].iteritems():
                 print var + "\t" + result
             print vartype + "\t" + str(len(self.vap_hits[vartype])/float(self.tot[vartype])) #+ "\t" + str(len(self.vap_hits[vartype])) + "\t" + str(self.tot[vartype])
-        print "VAP / LeftAlign overall:\t" + str(tothits / tottot) + "\t" + str(tottot)
+        if tottot > 0:
+            print "VAP / LeftAlign overall:\t" + str(tothits / tottot) + "\t" + str(tottot)
+        else:
+            print "VAP / LeftAlign overall:\tNaN\t" + str(tottot)
 
         tothits = 0.0
         tottot = 0.0
@@ -182,7 +185,10 @@ class VAPFailsVgraphHits(object):
             for var, result in self.vt_hits[vartype].iteritems():
                print var + "\t" + result
             print vartype + "\t" + str(len(self.vt_hits[vartype])/float(self.tot[vartype])) #+ "\t" + str(len(self.vt_hits[vartype])) + "\t" + str(self.tot[vartype])
-        print "VT:\t" + str(tothits / tottot) + "\t" + str(tottot)
+        if tottot > 0:
+            print "VT:\t" + str(tothits / tottot) + "\t" + str(tottot)
+        else:
+            print "VT:\tNaN\t" + str(tottot)
 
         tothits = 0.0
         tottot = 0.0
@@ -194,7 +200,10 @@ class VAPFailsVgraphHits(object):
             # for var, result in self.naive_hits[vartype].iteritems():
             #     print var + "\t" + result
             print vartype + "\t" + str(len(self.naive_hits[vartype])/float(self.tot[vartype])) #+ "\t" + str(len(self.naive_hits[vartype])) + "\t" + str(self.tot[vartype])
-        print "Naive:\t" + str(tothits / tottot)+  "\t" + str(tottot)
+        if tottot > 0:
+            print "Naive:\t" + str(tothits / tottot)+  "\t" + str(tottot)
+        else:
+            print "Naive:\tNaN\t" + str(tottot)
 
         print "\n\nTotal variants by type:"
         for vartype, tot in self.tot.iteritems():

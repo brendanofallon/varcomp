@@ -10,15 +10,15 @@ def get_callers():
         #"varscan": call_variant_varscan,
         #platypus-asm": call_variant_platypus_asm,
         #"rtg": call_variant_rtg,
-        # "gatk-hc": call_variant_gatk_hc,
+        "gatk-hc": call_variant_gatk_hc,
         #"wecall": call_wecall,
         # "gatk-ug": call_variant_gatk_ug
         #"wecall": call_wecall
         # "freebayes-mre": call_variant_fb_minrepeatentropy,
 
-        "gatk-hc": call_variant_gatk_hc_emit_all,
-        "gatk-ug": call_variant_gatk_ug_emit_all,
-        "varscan": call_variant_varscan_emit_all,
+        #"gatk-hc": call_variant_gatk_hc_emit_all,
+        #"gatk-ug": call_variant_gatk_ug_emit_all,
+        #"varscan": call_variant_varscan_emit_all,
     }
 
 
