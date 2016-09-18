@@ -31,19 +31,13 @@ Due to a current limitation with the simulation procedure, the minimum
 distance between any two variants in the input VCF cannot be less than 2kb.
 Otherwise, nearby variants might interfere in an unpredictable manner.
 
-##Variant caller benchmarking
+If the input VCF doesn't not contain any sample or genotype information,
+then you must specify one of --het or --hom to tell varcomp which genotype
+you'd like the variants to be.  For instance:
 
-Varcomp can also take an input variant list, simulate reads (or use existing
-simulated fastqs), and run several variant callers, and compare the results
-to the input set of variants to see which caller had the higher accuracy.
-Basic usage looks like:
+    python vcomp/injectvar.py -v my_variants.vcf --hom > my_hom_output.txt
 
-    python vcomp/injectvar.py -v my_variants.vcf > my_output.txt
-
-If you've already created an input set of fastqs, you can use them by:
-
-    python vcomp/injectvar.py -v my_variants.vcf --fqs my_variants_R1.fastq --fqs my_variants_R2.fastq > my_output.txt
-
+    
 ###Modifying input variants
 
 Given an input VCF, varcomp can perform several modifications of the
@@ -67,13 +61,51 @@ normalizers, aligners, comparison tools, etc).  The paths to these
 applications must be defined in a standard python configuration file.  By
 default, `injectvar.py` looks for a file called `comp.conf` in the active
 directory, but you can specify a path to it by using the `-c
-/path/to/configuration/file` argument.  The format of the file is pretty
-straightforward, just a list of key=value pairs where the values are the
-paths to various executables.
+/path/to/configuration/file` argument.  The format of the file is standard
+python configuration file, essentially just a list of key=value pairs where
+the values are the paths to various executables, with a few section headers
+(see example below).
+ 
+A minimal configuration file must include a path to the reference genome,
+the path to samtools, tabix, bgzip, and bwa executables.  You'll likely want
+at least one caller and one comparator tool to be able to do anything. 
+Here's a quick example:
+ 
+    [main]
+    ref_genome=/Users/example/resources/GRCh37.p5/GRCh37.p5.fa
+    samtools=/Users/bexample/tools/samtools
+    bgzip=/Users/example/tools/bgzip
+    tabix=/Users/example/tools/tabix
+    bwa=/Users/example/tools/bwa
+ 
+    [callers]
+    example_caller=/path/to/caller_module.py
 
- TODO: Exactly what is required in a minimal configuration file, samtools, tabix, and bgzip?
+    [comparators]
+    example_comparator=/path/to/comparator_module.py
+   
+###Built-in callers and comparators
 
-##Adding new callers, normalizers, etc
+Many commonly used variant callers are comparators are 'built in' and do not
+require any custom code.  However, they still require an entry in the
+configuration file to specify the path to the executable.  As of 9/16/2016,
+varcomp contains built in support for the following callers:
+
+  - GATK UnifiedGenotyper v3.6 (requires config entry `gatk=/path/to/GenomeAnalysisTK.jar`)
+  - GATK HaplotypeCaller  v3.6 (requires config entry `gatk=/path/to/GenomeAnalysisTK.jar`)
+  - Freebayes v1.0.1 (requires config entry `freebayes=/path/to/freebayes`)
+  - bcftools 1.3.1 (requires config entry `bcftools=/path/to/bcftools`)
+  - VarScan 2.4.1 (requires config entry `varscan=/path/to/VarScan.jar`)
+  - RTG 3.6.1 (requires config entry `rtg_jar=/path/to/RTG.jar` AND `rtg_ref_sdf=/path/to/ref_genome.sdf` for SDF-formatted ref genome)
+  - Platypus 0.8. (requires config entry `platypus=/path/to/Platypus.py`)
+   
+Similarly, the following variant comparison tools are all supported
+
+  - [vcfeval](http://realtimegenomics.com/products/rtg-tools/) (requires config entry `rtg_jar=/path/to/RTG.jar` AND `rtg_ref_sdf=/path/to/ref_genome.sdf` for SDF-formatted ref genome)
+  - [hap.py](https://github.com/Illumina/hap.py) (requires config entry `happy=/slc-ngs/opt/hap.py-0.2.7/bin/hap.py`)
+  - [vgraph](https://github.com/bioinformed/vgraph) (requires config entry `vgraph=vgraph`)
+
+###Adding new callers, normalizers, etc
 
 Adding new callers, normalization tools, or comparators is easy and doesn't
 require a rebuild.  To add a new caller, simply create a new python file
@@ -88,8 +120,8 @@ Here's a quick example:
         vcfoutput = "output-fb.vcf"
         cmd=["/path/to/freebayes", "-f", ref_fasta, "-t", bed, "-b", bam, "-v", vcfoutput]
         subprocess.check_output(cmd)
-        return util.sort_vcf(vcfoutput, conf)
-
+        return util.sort_vcf(vcfoutput, conf) # Automatically sort & bgzip & tabix index 
+    
     def get_callers():
         return { "freebayes": call_variant_freebayes }
 
@@ -113,7 +145,6 @@ By default varcomp will execute every caller it finds.  If you'd like to run
 some subset of the callers, use the --callers argument, like so:
 
      python vcomp/injectvar.py -v my_vars.vcf --callers freebayes
-
 
 ## Docker based setup
 
