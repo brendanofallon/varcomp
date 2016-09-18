@@ -5,6 +5,6 @@ RUN apt-get update
 RUN apt-get install python-scipy -y
 RUN apt-get install python-matplotlib -y
 WORKDIR /opt/
-RUN git clone https://github.com/goranrakocevic/varcomp.git
+RUN git clone https://github.com/brendanofallon/varcomp.git
 WORKDIR /opt/varcomp
 RUN pip install .

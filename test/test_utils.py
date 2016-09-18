@@ -1,13 +1,14 @@
-
-import unittest
 import os
+import unittest
+
 from collections import namedtuple
+
 from vcomp import util
 
 MockVariant = namedtuple('MockVariant', ['chrom', 'start', 'ref', 'alleles', 'samples'])
 
-class TestUtils(unittest.TestCase):
 
+class TestUtils(unittest.TestCase):
     DATA_DIR = "test_data"
     DATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), DATA_DIR)
     HALFCALL_VCF = "test_halfcalls.vcf"
@@ -17,7 +18,6 @@ class TestUtils(unittest.TestCase):
     COMPLEX_VCF = "morecomplex.vcf"
 
     def test_rm_halfcalls(self):
-
         input_vcf = os.path.join(TestUtils.DATA_PATH, TestUtils.HALFCALL_VCF)
         try:
             no_halfcalls = util.remove_halfcalls(input_vcf)
@@ -43,17 +43,17 @@ class TestUtils(unittest.TestCase):
         bed_path = os.path.join(TestUtils.DATA_PATH, TestUtils.TEST_BED)
         regions = [r for r in util.read_regions(bed_path)]
         self.assertTrue(len(regions) == 3)
-        self.assertTrue(regions[0].chr == '1')
+        self.assertTrue(regions[0].chrom == '1')
         self.assertTrue(regions[0].start == 10)
-        self.assertTrue(regions[0].end == 20)
+        self.assertTrue(regions[0].stop == 20)
 
-        self.assertTrue(regions[1].chr == '1')
+        self.assertTrue(regions[1].chrom == '1')
         self.assertTrue(regions[1].start == 100)
-        self.assertTrue(regions[1].end == 200)
+        self.assertTrue(regions[1].stop == 200)
 
-        self.assertTrue(regions[2].chr == '10')
+        self.assertTrue(regions[2].chrom == '10')
         self.assertTrue(regions[2].start == 55)
-        self.assertTrue(regions[2].end == 77)
+        self.assertTrue(regions[2].stop == 77)
 
     def test_vars_to_bed(self):
         vars = [
@@ -68,21 +68,21 @@ class TestUtils(unittest.TestCase):
         bed = util.vars_to_bed(vars, window=500)
         regions = [r for r in util.read_regions(bed)]
         self.assertTrue(len(regions)==4)
-        self.assertTrue(regions[0].chr == '1')
+        self.assertTrue(regions[0].chrom == '1')
         self.assertTrue(regions[0].start == 500)
-        self.assertTrue(regions[0].end == 1500)
+        self.assertTrue(regions[0].stop == 1500)
 
-        self.assertTrue(regions[1].chr == '1')
+        self.assertTrue(regions[1].chrom == '1')
         self.assertTrue(regions[1].start == 4500)
-        self.assertTrue(regions[1].end == 5550)
+        self.assertTrue(regions[1].stop == 5550)
 
-        self.assertTrue(regions[2].chr == '2')
+        self.assertTrue(regions[2].chrom == '2')
         self.assertTrue(regions[2].start == 1500)
-        self.assertTrue(regions[2].end == 2510)
+        self.assertTrue(regions[2].stop == 2510)
 
-        self.assertTrue(regions[3].chr == '2')
+        self.assertTrue(regions[3].chrom == '2')
         self.assertTrue(regions[3].start == 2500)
-        self.assertTrue(regions[3].end == 3500)
+        self.assertTrue(regions[3].stop == 3500)
 
         os.remove(bed)
 

@@ -1,4 +1,5 @@
 import os
+import time
 import subprocess
 from collections import defaultdict
 
@@ -12,11 +13,12 @@ CIS = "cis"
 TRANS = "trans"
 ALL_HOMS="all homs"
 
-def gen_alt_genome(chrom, pvars, orig_genome_path, dest_filename, overwrite=False, window_size=2000):
+
+def gen_alt_genome(chrom, pvars, orig_genome, dest_filename, overwrite=False, window_size=2000):
     """
     Generate a new genome fasta that contains the given variant
-    :param variant: Tuple of (chr, pos, ref, alt)
-    :param orig_genome_path:
+    :param variant: Tuple of (chrom, pos, ref, alt)
+    :param orig_genome:
     :param dest_filename:
     :param overwrite: OK to overwrite existing dest_filename
     :param window_size: Number of ref genome bases to include
@@ -26,11 +28,11 @@ def gen_alt_genome(chrom, pvars, orig_genome_path, dest_filename, overwrite=Fals
         raise ValueError("Destination " + dest_filename + " exists and overwrite is set to False")
 
     pvars = sorted(pvars, key=lambda x: x[0], reverse=True)
-    ref_genome = pysam.FastaFile(orig_genome_path)
+    ref_genome = pysam.FastaFile(orig_genome)
     mod_var_start = pvars[0][0] + 1 #Start position of first variant
     window_start = mod_var_start-window_size/2
-    window_end = mod_var_start+window_size/2
-    seq = ref_genome.fetch(chrom, window_start, window_end)
+    window_stop = mod_var_start+window_size/2
+    seq = ref_genome.fetch(chrom, window_start, window_stop)
     newseq = seq
 
     for start, ref, alt in pvars:
@@ -48,44 +50,49 @@ def gen_alt_genome(chrom, pvars, orig_genome_path, dest_filename, overwrite=Fals
     dest_index.close()
     return len(newseq)
 
-def generate_reads(alt_genome_path, chr, pos, read_count=250, prefix="test-reads", read1_fh=None, read2_fh=None):
+
+def generate_reads(alt_genome, chrom, pos, read_count=250, prefix="test-reads", read1_fh=None, read2_fh=None):
     """
     Generate reads in fastq format from the altered genome, return paths to the files generated
-    :param alt_genome_path:
+    :param alt_genome:
     :param read_count: Total number of read pairs to generate
     :param prefix: filename prefix for output files
     :return: Paths to two fastq files containing reads
     """
-    generator = rs.ReadSimulator(alt_genome_path, chr, pos)
+    generator = rs.ReadSimulator(alt_genome, chrom, pos)
     r1_filename = prefix + "_R1.fastq"
     r2_filename = prefix + "_R2.fastq"
-    close = False
+    close1 = close2 = False
+
     if read1_fh is None:
         read1_fh = open(r1_filename, "w")
-        close = True
+        close1 = True
     if read2_fh is None:
         read2_fh = open(r2_filename, "w")
-        close = True
+        close2 = True
 
     for x in range(read_count):
         (a, b) = generator.gen_read_pair()
         read1_fh.write(a + "\n")
         read2_fh.write(b + "\n")
-    if close:
+
+    if close1:
         read1_fh.close()
+    if close2:
         read2_fh.close()
+
     return (r1_filename, r2_filename)
 
 
 def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
-    dest = reads1.replace("_1.fq", "") + ".bam"
-    cmd = bwapath + " mem " + " -I 250.0,50,500 -R \'" + "\t".join(['@RG', 'ID:test', 'SM:sample', 'PL:Illumina']) + "\' " + ref_genome + " " + reads1 + " " + reads2 + " | " + samtoolspath + " sort -T sorttmp -O bam - > " + dest + "\n" + samtoolspath + " index " + dest + "\n"
-    script_path = "./align.sh"
-    with open(script_path, "w") as script_fh:
-        script_fh.write(cmd)
-    os.chmod(script_path, 0755)
-    subprocess.check_call(script_path, shell=True)
+    dest = reads1.replace("_R1.fq", "") + ".bam"
+    cmd = '''{bwa} mem -I 150,30 -R "@RG\\tID:test\\tSM:sample\\tPL:Illumina" {ref} {reads1} {reads2} 2> /dev/null |
+             {samtools} sort -T sorttmp -O bam > {bam} 2> /dev/null;
+             {samtools} index {bam}'''.format(bwa=bwapath, ref=ref_genome, reads1=reads1, reads2=reads2,
+                                              samtools=samtoolspath, bam=dest)
+    subprocess.check_call(cmd, shell=True)
     return dest
+
 
 def gen_bam_stats(bamfile, region=None):
     """
@@ -130,6 +137,7 @@ def collect_alts(vset):
     for i,var in enumerate(vset['vars']):
         if policy == ALL_HOMS:
             if len(var.alts)>1:
+                # FIXME: randomly select alt alleles?
                 raise ValueError("Can't use ALL_HOMS policy for variants with multiple alts")
             hap1.append( (var.start, var.ref, var.alts[0]) )
             hap2.append( (var.start, var.ref, var.alts[0]) )
@@ -158,21 +166,23 @@ def collect_alts(vset):
             if len(var.alts)==1:
                 hap1.append( (var.start, var.ref, var.alts[0]) )
                 hap2.append( (var.start, var.ref, var.ref) )
-            elif len(var.alts)==2:
+            elif len(var.alts)>=2:
+                # FIXME: randomly select alt alleles?
                 hap1.append( (var.start, var.ref, var.alts[0]) )
                 hap2.append( (var.start, var.ref, var.alts[1]) )
             else:
-                raise ValueError('Cant handle triploid / polyploid variants')
+                raise ValueError('Cant handle triploid / polyploid variants: {}'.format(','.join(var.alts)))
         else:
             raise ValueError('Unrecognized phasing policy: ' + policy)
 
     return hap1, hap2
 
-def gen_alt_fq(ref_path, variant_sets, read_count, dest_prefix="input"):
+
+def gen_alt_fq(ref, variant_sets, read_count, dest_prefix="input"):
     """
     Generate a batch of simulated reads independently for the variants in each variant_set
     Each set contains a list of variants and a policy describing cis / trans configuration
-    :param ref_path: Path to reference fasta
+    :param ref: Path to reference fasta
     :param variant_sets: List of sets of variants to inject into reference
     :param read_count:
     :return:
@@ -181,52 +191,56 @@ def gen_alt_fq(ref_path, variant_sets, read_count, dest_prefix="input"):
     reads2 = dest_prefix + "_R2.fq"
     read1_fh = open(reads1, "w")
     read2_fh = open(reads2, "w")
-    read_count = int(read_count * 1.25)  # Make sure depth in IGV is about whatever read_count is
+    #read_count = int(read_count * 1.25)  # Make sure depth in IGV is about whatever read_count is
+
     for vset in variant_sets:
         chrom = vset['vars'][0].chrom
         hap1, hap2 = collect_alts(vset)
 
-        alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
-        alt_genome_size = gen_alt_genome(chrom, hap1, ref_path, alt_genome_path, overwrite=True)
-        generate_reads(alt_genome_path, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
-        os.remove(alt_genome_path)
-        os.remove(alt_genome_path + ".fai")
+        alt_genome = 'alt_genome' + util.randstr() + '.fa'
+        alt_genome_size = gen_alt_genome(chrom, hap1, ref, alt_genome, overwrite=True)
+        generate_reads(alt_genome, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
+        os.remove(alt_genome)
+        os.remove(alt_genome + ".fai")
 
-        alt_genome_path = 'alt_genome' + util.randstr() + '.fa'
-        alt_genome_size = gen_alt_genome(chrom, hap2, ref_path, alt_genome_path, overwrite=True)
-        generate_reads(alt_genome_path, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
-        os.remove(alt_genome_path)
-        os.remove(alt_genome_path + ".fai")
+        alt_genome = 'alt_genome' + util.randstr() + '.fa'
+        alt_genome_size = gen_alt_genome(chrom, hap2, ref, alt_genome, overwrite=True)
+        generate_reads(alt_genome, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
+        os.remove(alt_genome)
+        os.remove(alt_genome + ".fai")
 
     read1_fh.close()
     read2_fh.close()
     return (reads1, reads2)
 
-def gen_alt_bam(ref_path, conf, reads):
+
+def gen_alt_bam(ref, conf, reads):
     """
     Align reads to reference, sort them, and generate an indexed .bam file. This assumes
     BWA, but we should allow this to be defined in a configuration.
-    :param ref_path: Path to reference genome
+    :param ref: Path to reference genome
     :param conf: Configuration containing paths to BWA, samtools, etc
     :param reads: Paths to reads to align (assumes paired-end)
     :return: Path to bam file
     """
     #TODO: Allow different alignment tools
     reads1, reads2 = reads
-    bam = create_bam(ref_path, reads1, reads2, conf.get('main', 'bwa_path'), conf.get('main', 'samtools_path'))
+    bam = create_bam(ref, reads1, reads2, conf.get('main', 'bwa'), conf.get('main', 'samtools'))
     verify_reads(reads1, reads2, bam, conf)
     return bam
+
 
 def verify_reads(fq1, fq2, bam, conf):
     """
     Verify that all reads in the input fastq file are present in the bam file
     """
-    r1 = len(list([line for line in open(fq1, "r") if line.strip()=='+']))
-    r2 = len(list([line for line in open(fq2, "r") if line.strip()=='+']))
-    cmd = conf.get('main', 'samtools_path') + " flagstat " + bam
-    info = subprocess.check_output(cmd, shell=True, executable="/bin/bash")
+    # FIXME: Use itertools.ilen
+    r1 = len([line for line in open(fq1, "r") if line.strip()=='+'])
+    r2 = len([line for line in open(fq2, "r") if line.strip()=='+'])
+    cmd = [conf.get('main', 'samtools'), "flagstat", bam]
+    time.sleep(1)
+    info = subprocess.check_output(cmd)
     tot_line = info.split('\n')[0]
     bc = int(tot_line.split(' ')[0])
     if (r1 + r2) > bc:
         raise ValueError("BAM does not have same number of reads as input fastqs")
-

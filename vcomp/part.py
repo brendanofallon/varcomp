@@ -1,11 +1,14 @@
+import sys
+
 from   collections import deque
 from   itertools   import groupby
 from   operator    import attrgetter
 from   heapq       import heappop, heappush
-import sys
+
 import pysam
 
-DEFAULT_CONTIG_ORDER=['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20', '21', '22', '3', '4', '5', '6', '7', '8','9', 'MT', 'X','Y']
+DEFAULT_CONTIG_ORDER=['1', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '2', '20',
+                      '21', '22', '3', '4', '5', '6', '7', '8','9', 'MT', 'X','Y']
 
 def var_comp(v1, v2):
     v1c = DEFAULT_CONTIG_ORDER.index(v1[0])
@@ -14,8 +17,6 @@ def var_comp(v1, v2):
         return v1[1] - v2[1]
     else:
         return v1c - v2c
-
-
 
 
 def window(seq, n=2):
@@ -88,7 +89,7 @@ def partition_intervals(items):
 
         heappush(parts, (stop, p))
 
-    return [ p for (stop, p) in parts ]
+    return [ p for (_, p) in parts ]
 
 
 def merge_partitions(parts, solitary):
@@ -131,7 +132,7 @@ def merge_partitions(parts, solitary):
         heappush(heap, (len(p), p) )
 
     # Undecorate heap to obtain final partitions
-    return [p for l,p in heap]
+    return [p for _,p in heap]
 
 
 def main(args):
