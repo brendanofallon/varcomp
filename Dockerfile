@@ -1,6 +1,6 @@
 #Requires the GATK jar file, and the Platypus folder to be placed in the current directory
 
-FROM ubuntu:14.04
+FROM ubuntu:16.04
 
 RUN apt-get update
 RUN apt-get upgrade -y
@@ -23,19 +23,18 @@ RUN apt-get install python2.7-dev -y
 #RUN apt-get install --upgrade cython -y
 RUN apt-get install python-setuptools -y
 RUN apt-get install python-pip -y
+RUN pip install --upgrade pip setuptools wheel cython
 RUN apt-get install python-numpy -y
-RUN pip install cython
-RUN easy_install -U distribute
 
-# java
 RUN \
-  echo oracle-java7-installer shared/accepted-oracle-license-v1-1 select true | debconf-set-selections && \
+  echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select true | debconf-set-selections && \
   add-apt-repository -y ppa:webupd8team/java && \
   apt-get update && \
-  apt-get install -y oracle-java7-installer && \
+  apt-get install -y oracle-java8-installer && \
   rm -rf /var/lib/apt/lists/* && \
-  rm -rf /var/cache/oracle-jdk7-installer
+  rm -rf /var/cache/oracle-jdk8-installer
 
+ENV JAVA_HOME /usr/lib/jvm/java-8-oracle
 
 RUN apt-get clean -y
 WORKDIR /opt/
@@ -50,22 +49,22 @@ WORKDIR /opt/
 
 # samtools
 RUN apt-get install git -y
-RUN git clone --branch=develop git://github.com/samtools/htslib.git
-RUN git clone --branch=develop git://github.com/samtools/bcftools.git
-RUN git clone --branch=develop git://github.com/samtools/samtools.git
+RUN git clone git://github.com/samtools/htslib.git
+RUN git clone git://github.com/samtools/bcftools.git
+RUN git clone git://github.com/samtools/samtools.git
 RUN cd htslib && make && make install
 WORKDIR /opt/
 RUN cd samtools && make && make install
 WORKDIR /opt/
-RUN cd bcftools && make && make install
+RUN cd bcftools && touch doc/bcftools.1 && make && make install
 WORKDIR /opt/
 
 # numpy and such
 RUN pip install --upgrade numpy
 RUN pip install --upgrade pandas
 RUN pip install -U git+https://github.com/pysam-developers/pysam
-RUN pip install pybedtools
-RUN pip install bx-python
+#RUN pip install pybedtools
+#RUN pip install bx-python
 
 # bwa
 RUN git clone https://github.com/lh3/bwa.git
@@ -81,21 +80,28 @@ WORKDIR /opt
 RUN rm -rf /opt/hap.py-source
 
 # platypus
-COPY Platypus_0.8.1 /opt/Platypus_0.8.1
-WORKDIR /opt/Platypus_0.8.1
-RUN ./buildPlatypus.sh
+RUN git clone https://github.com/andyrimmer/Platypus.git /opt/platypus
+WORKDIR /opt/platypus
+RUN make
 WORKDIR /opt
 
-# gatk
-COPY GenomeAnalysisTK.jar /opt/GenomeAnalysisTK.jar
+# gatk 3.5
+RUN mkdir /opt/gatk-3.5-0
+COPY GenomeAnalysisTK-3.5-0-g36282e4.tar.bz2 /opt/gatk-3.5-0
+WORKDIR /opt/gatk-3.5-0
+RUN tar xjf GenomeAnalysisTK-3.5-0-g36282e4.tar.bz2 && rm GenomeAnalysisTK-3.5-0-g36282e4.tar.bz2
+
+# gatk 3.6
+RUN mkdir /opt/gatk-3.6-0
+COPY GenomeAnalysisTK-3.6.tar.bz2 /opt/gatk-3.6-0
+WORKDIR /opt/gatk-3.6-0
+RUN tar xjf GenomeAnalysisTK-3.6.tar.bz2 && rm GenomeAnalysisTK-3.6.tar.bz2
+WORKDIR /opt
 
 # vcfval
 RUN wget https://github.com/RealTimeGenomics/rtg-tools/releases/download/3.6.1/rtg-tools-3.6.1-linux-x64.zip
 
-RUN unzip rtg-tools-3.6.1-linux-x64.zip
-#folder is rtg-tools-3.6.1
-
-RUN unzip rtg-tools-3.6.1-linux-x64.zip
+RUN unzip rtg-tools-3.6.1-linux-x64.zip && rm rtg-tools-3.6.1-linux-x64.zip
 
 # vt
 RUN git clone https://github.com/atks/vt.git

@@ -1,11 +1,13 @@
 import os
-import pysam
-import util
 import logging
+
 from collections import defaultdict
-import traceback as tb
-import sys
-from sim import bam_simulation
+
+import pysam
+
+import vcomp.util as util
+from vcomp.sim import bam_simulation
+
 
 NO_VARS_FOUND_RESULT="No variants identified"
 MATCH_RESULT="Variants matched"
@@ -46,12 +48,10 @@ class VariantProcessor(object):
         ref_path = self.conf.get('main', 'ref_genome')
         called_vars = {}
         for caller in self.callers:
-            logging.info("Running variant caller " + caller)
+            logging.info("--> Running variant caller " + caller)
             vars = self.callers[caller](bam, ref_path, bed, self.conf)
             called_vars[caller] = vars
         return called_vars
-
-
 
     def collect_bam_stats(self, bam, bed, orig_vcf):
         """
@@ -74,13 +74,9 @@ class VariantProcessor(object):
         for region in util.read_regions(bed):
             key = var_key(util.find_matching_var(orig_vcf, region))
             for caller in caller_vars:
-                # Avoid pysam bug with empty vcfs
-                if util.is_empty(caller_vars[caller]):
-                    var_quals[key][caller] = MISSING_QUAL
-                else:
-                    with pysam.VariantFile(caller_vars[caller]) as cvars:
-                        cvar = util.find_matching_var(cvars, region)
-                        var_quals[key][caller] = find_qual(cvar)
+                with pysam.VariantFile(caller_vars[caller]) as cvars:
+                    cvar = util.find_matching_var(cvars, region)
+                    var_quals[key][caller] = find_qual(cvar)
         return var_quals
 
     def process_batch(self, vcf, batchname, gt_policy, ex_snp=None, keep_tmpdir=False, read_depth=250, reads=None):
@@ -114,27 +110,28 @@ class VariantProcessor(object):
             caller_variants = self.call_variants(bam, bed)
             bam_stats = self.collect_bam_stats(bam, bed, orig_vcf)
             var_quals = self.collect_var_quals(caller_variants, bed, orig_vcf)
+
             for normalizer_name, normalizer in self.normalizers.iteritems():
-                logging.info("Running normalizer " + normalizer_name)
+                logging.info("--> Running normalizer " + normalizer_name)
                 normed_orig_vcf = normalizer(orig_vcf, self.conf)
 
                 for caller in caller_variants:
                     normed_caller_vcf = normalizer(caller_variants[caller], self.conf)
 
                     for comparator_name, comparator in self.comparators.iteritems():
-                        logging.info("Running comparator " + comparator_name + " (normalizer " + normalizer_name + ")")
+                        logging.info("--> Running comparator " + comparator_name + " (normalizer " + normalizer_name + ")")
                         all_results = comparator(normed_orig_vcf, normed_caller_vcf, None, self.conf)
                         single_results = split_results(all_results, bed)
                         for region, result in zip(util.read_regions(bed), single_results):
                             match_vars = util.find_matching_var(orig_vcf, region)
-                            if len(match_vars) == 0:
+                            if not match_vars:
                                 raise ValueError('Unable to find original variant from region ' + str(region))
                             result = compare_single_var(result,
                                                         region,
                                                         normed_orig_vcf,
                                                         normed_caller_vcf,
                                                         comparator,
-                                                        "/".join([str(i) for i in match_vars[0].samples[0]['GT']]),
+                                                        "/".join(str(i) for i in match_vars[0].samples[0]['GT']),
                                                         self.conf)
                             key = var_key(match_vars)
                             if caller not in var_results[key]:
@@ -145,66 +142,67 @@ class VariantProcessor(object):
             self.reporter.write_output(var_results, var_quals, bam_stats)
 
     def compare_test_vcf(self, raw_orig_vcf, raw_test_vcf):
-
         raw_orig_vcf = os.path.abspath(raw_orig_vcf)
         raw_test_vcf = os.path.abspath(raw_test_vcf)
-        orig_vars = list(pysam.VariantFile(raw_orig_vcf))
-        tmp_dirname = raw_test_vcf.replace(".gz", "").replace(".vcf", "") + "-vcomp-" + util.randstr()
+        orig_vars    = list(pysam.VariantFile(raw_orig_vcf))
+        tmp_dirname  = util.strip_extensions(raw_test_vcf, ['gz','vcf']) + "-vcomp-" + util.randstr()
+
         with util.TempDir(dirname=tmp_dirname):
             orig_vcf = util.bgz_tabix(raw_orig_vcf, self.conf)
-
             test_vcf = util.remove_halfcalls(raw_test_vcf)
             test_vcf = util.bgz_tabix(test_vcf, self.conf)
-            caller_name = test_vcf.replace(".gz", "").replace(".vcf", "")
+            caller_name = util.strip_extensions(test_vcf, ['gz','vcf'])
             bed = util.vars_to_bed(orig_vars)
             var_results = defaultdict(dict)
             var_quals = self.collect_var_quals({caller_name: test_vcf}, bed, orig_vcf)
             bamstats = defaultdict(dict)
 
-
             for normalizer_name, normalizer in self.normalizers.iteritems():
-                logging.info("Running normalizer " + normalizer_name)
-                normed_orig_vcf = normalizer(orig_vcf, self.conf)
+                logging.info("--> Running normalizer " + normalizer_name)
+                normed_orig_vcf   = normalizer(orig_vcf, self.conf)
                 normed_caller_vcf = normalizer(test_vcf, self.conf)
 
                 for comparator_name, comparator in self.comparators.iteritems():
-                    logging.info("Running comparator " + comparator_name + " (normalizer " + normalizer_name + ")")
+                    logging.info("--> Running comparator " + comparator_name + " (normalizer " + normalizer_name + ")")
                     all_results = comparator(normed_orig_vcf, normed_caller_vcf, None, self.conf)
                     single_results = split_results(all_results, bed)
                     for region, result in zip(util.read_regions(bed), single_results):
                         match_vars = util.find_matching_var(orig_vcf, region)
-                        if len(match_vars) == 0:
+                        if not match_vars:
                             raise ValueError('Unable to find original variant from region ' + str(region))
                         result = compare_single_var(result,
                                                     region,
                                                     normed_orig_vcf,
                                                     normed_caller_vcf,
                                                     comparator,
-                                                    "/".join([str(i) for i in match_vars[0].samples[0]['GT']]),
+                                                    "/".join(str(i) for i in match_vars[0].samples[0]['GT']),
                                                     self.conf)
                         key = var_key(match_vars)
                         if caller_name not in var_results[key]:
                             var_results[key][caller_name] = defaultdict(dict)
                         var_results[key][caller_name][normalizer_name][comparator_name] = result
                         bamstats[key] = {}
+
         # Iterate over all results and write to standard output. We do this here instead of within the loops above
         # because it keeps results organized by variant, which makes them easier to look at
         self.reporter.write_output(var_results, var_quals, bamstats)
 
 
 def find_qual(vars):
+    # FIXME: Is this right when len(vars)>1?
     qual = MISSING_QUAL
     if vars is None or len(vars)==0:
         return qual
 
     var = vars[0]
     if var.qual is None:
-        if 'GQ' in var.samples[0]:
+        if 'GQ' in var:
             qual = var.samples[0]['GQ']
     else:
         qual = var.qual
 
     return qual
+
 
 def result_from_tuple(tup):
     """
@@ -243,7 +241,8 @@ def result_from_tuple(tup):
 def compare_single_var(result, bedregion, orig_vars, caller_vars, comparator, inputgt, conf):
     """
     Determine a result string for the given result tuple. Not trivial since for NO_MATCH_RESULTS we need to
-     determine if a simple genotype change will produce a match
+    determine if a simple genotype change will produce a match
+
     :param result: Result tuple produced by a comparator
     :param bedregion: Genomic region containing result
     :param orig_vars: 'original' (truth) variant set
@@ -269,6 +268,7 @@ def compare_single_var(result, bedregion, orig_vars, caller_vars, comparator, in
 
     return result_str
 
+
 def split_results(allresults, bed):
     """
     allresults is the result of a call to a comparator, so it's a
@@ -279,14 +279,16 @@ def split_results(allresults, bed):
     :param bed: BED file to split regions by
     :return: List of tuples containing same data as allresults, but organized by bed region
     """
+    # FIXME: Use non-quadratic search
     reg_results = []
     for region in util.read_regions(bed):
-        fns = [v for v in allresults[0] if v.chrom==region.chr and v.start >= region.start and v.start < region.end]
-        matches = [v for v in allresults[1] if v[0].chrom==region.chr and v[0].start >= region.start and v[0].start < region.end]
-        fps = [v for v in allresults[2] if v.chrom==region.chr and v.start >= region.start and v.start < region.end]
+        fns = [v for v in allresults[0] if v.chrom==region.chrom and v.start >= region.start and v.start < region.stop]
+        matches = [v for v in allresults[1] if v[0].chrom==region.chrom and v[0].start >= region.start and v[0].start < region.stop]
+        fps = [v for v in allresults[2] if v.chrom==region.chrom and v.start >= region.start and v.start < region.stop]
         reg_results.append( (fns, matches, fps) )
 
     return reg_results
+
 
 def create_variant_sets(vars, ex_snp_info, default_policy, ref_genome):
     """
@@ -304,9 +306,9 @@ def create_variant_sets(vars, ex_snp_info, default_policy, ref_genome):
         raise ValueError('Positive snp distances are currently not supported')
 
     default_gt = None
-    if default_policy ==  bam_simulation.ALL_HOMS:
+    if default_policy == bam_simulation.ALL_HOMS:
         default_gt = "1|1"
-    if default_policy ==  bam_simulation.ALL_HETS:
+    if default_policy == bam_simulation.ALL_HETS:
         default_gt = "0|1"
 
     for var in vars:
@@ -347,6 +349,6 @@ def var_key(vars):
     """
     Unique str for one or more variants
     """
-    if type(vars) is not list:
+    if not isinstance(vars, (list, tuple)):
         vars = [vars]
-    return "/".join([" ".join(str(var).split()[0:5]) for var in vars])
+    return "/".join(" ".join(str(var).split()[0:5]) for var in vars)

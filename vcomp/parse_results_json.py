@@ -1,13 +1,15 @@
-
-import json
-import injectvar, batch_processor
 import sys
+import json
+import itertools
+
 from collections import defaultdict
+
 # import seaborn as sns
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import itertools
+
+import vcomp.injectvar as injectvar
+import vcomp.batch_processor as batch_processor
 
 VARIANT = "variant"
 QUALS="caller_quals"
@@ -613,6 +615,7 @@ def get_vartype(varstr):
         return "Deletion (" + sizebin(len(ref)-len(alt)) + ")"
     return "MNP " + sizebin( len(ref))
 
+
 def main(paths, operations=[]):
     line_num = 0
 
@@ -643,7 +646,6 @@ if __name__=="__main__":
         exit(1)
 
     ops = [
-
         Tabelize(),
         #NormBreakFinder(),
         #VAPFailsVgraphHits(),

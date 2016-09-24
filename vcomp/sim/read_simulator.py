@@ -3,8 +3,9 @@ Very simple tool for simulating paired end ngs reads. No base calling or pcr err
 """
 
 import random
-import pysam
 import string
+
+import pysam
 
 revcomp_lookup={
     'A': 'T',
@@ -22,17 +23,17 @@ class ReadSimulator(object):
      keywords args to the constructor. This creates coverage histograms that look like hybrid capture data.
     """
 
-    def __init__(self, ref_genome, target_chr, target_mid, mean_template_size=250, stdev_template_size=50, read_len=100):
+    def __init__(self, ref_genome, target_chrom, target_mid, mean_template_size=150, stdev_template_size=30, read_len=76):
         """
         Create a new ReadSimulator
         :param ref_genome: Path to fasta file containing 'reference' to simulate from
-        :param target_chr: Contig / chr name in fasta file
+        :param target_chrom: Contig / chrom name in fasta file
         :param target_mid: Base offset in reference contig describing the
         :param mean_template_size: Mean size in bp of templates
         :param stdev_template_size: Stdev of template size
         :param read_len: Read length
         """
-        self.target_chr = target_chr
+        self.target_chrom = target_chrom
         self.target_pos = target_mid #Mean midpoint of templates, typically a simulated variant is close to here
         self.target_pos_stdev = 50
         self.mean_template_size = mean_template_size
@@ -41,10 +42,10 @@ class ReadSimulator(object):
         self.read_len=read_len
         ref = pysam.FastaFile(ref_genome)
         self.seq_start = max(0, target_mid - self.flanking_bases)
-        self.seq_end = target_mid + self.flanking_bases
-        self.seq = ref.fetch(target_chr, self.seq_start, self.seq_end)
+        self.seq_stop = target_mid + self.flanking_bases
+        self.seq = ref.fetch(target_chrom, self.seq_start, self.seq_stop)
         self.counter = 0
-        self.quals = "".join(['Z' for x in range(self.read_len)])
+        self.quals = "".join('Z' for x in range(self.read_len))
 
     def gen_read_pair(self):
         """
@@ -57,9 +58,9 @@ class ReadSimulator(object):
         second_read = revcomp(templ_seq[-self.read_len:])
         ref_templ_mid = self.target_pos-self.flanking_bases+template_pos
         ref_read_start = ref_templ_mid-template_size/2
-        rnd = "".join([ random.choice(string.ascii_lowercase + string.ascii_uppercase) for _ in range(8)])
-        first_read_name = '@' + str(self.counter) + ":" + self.target_chr + ":" + rnd + ":" + str(ref_read_start)
-        second_read_name = '@' + str(self.counter) + ":" + self.target_chr + ":" + rnd + ":" + str(ref_read_start)
+        rnd = "".join(random.choice(string.ascii_lowercase + string.ascii_uppercase) for _ in range(8))
+        first_read_name = '@' + str(self.counter) + ":" + self.target_chrom + ":" + rnd + ":" + str(ref_read_start)
+        second_read_name = '@' + str(self.counter) + ":" + self.target_chrom + ":" + rnd + ":" + str(ref_read_start)
         first_fq = first_read_name + "\n" + first_read + "\n+\n" + self.quals[0:len(first_read)]
         second_fq = second_read_name + "\n" + second_read + "\n+\n" + self.quals[0:len(second_read)]
         self.counter += 1
@@ -75,7 +76,3 @@ def revcomp(bases):
     for b in bases[::-1]:
         result.append(revcomp_lookup[b])
     return "".join(result)
-
-
-
-

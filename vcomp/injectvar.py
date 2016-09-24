@@ -1,22 +1,26 @@
-import ConfigParser as cp
-import json
-import logging
 import os
 import sys
-import pysam
-from collections import namedtuple
+import imp
+import json
+import logging
 import random
 import argparse
-import imp
-import util
-from sim import bam_simulation
-import batch_processor as bp
-from plugins import core_callers,\
-    normalizers as core_norms, \
-    comparators as core_comps
+
+import ConfigParser as cp
+from collections import namedtuple
+
+import pysam
 
 
-all_result_types = (bp.MATCH_RESULT, bp.NO_MATCH_RESULT, bp.NO_VARS_FOUND_RESULT, bp.MATCH_WITH_EXTRA_RESULT, bp.ZYGOSITY_MISSING_ALLELE, bp.ZYGOSITY_EXTRA_ALLELE, bp.ERROR_RESULT)
+import vcomp.util as util
+import vcomp.batch_processor as bp
+from   vcomp.sim import bam_simulation
+
+from vcomp.plugins import core_callers, normalizers as core_norms, comparators as core_comps
+
+
+all_result_types = (bp.MATCH_RESULT, bp.NO_MATCH_RESULT, bp.NO_VARS_FOUND_RESULT, bp.MATCH_WITH_EXTRA_RESULT,
+                    bp.ZYGOSITY_MISSING_ALLELE, bp.ZYGOSITY_EXTRA_ALLELE, bp.ERROR_RESULT)
 
 ExSNPInfo = namedtuple('ExSNPInfo', ['policy', 'dist'])
 
@@ -45,6 +49,7 @@ class JsonReporter(object):
                 "results": vresults
             }, self.output)
             self.output.write("\n")
+
 
 def gen_reads(vcf, dest_vcf, dest_fq_prefix, ex_snp, gt_policy, read_depth, conf):
     """
@@ -94,9 +99,8 @@ def load_components(conf, section, callable_name):
     except:
         return components
 
-    for item in conf.items(section):
+    for item in items:
         try:
-
             if not os.path.isabs(item[1]):
                 pdir = os.path.split(__file__)[0]
                 mod_path = os.path.split( pdir )[0] + "/" + item[1]
@@ -114,6 +118,7 @@ def load_components(conf, section, callable_name):
             raise e
 
     return components
+
 
 def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None, single_batch=False, keep_tmpdir=False, read_depth=250):
     """
@@ -142,21 +147,20 @@ def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None,
         variant_callers = callers_to_use
 
     if fqs is not None:
-        nfq = []
-        for fq in fqs:
-            nfq.append( os.path.abspath(fq))
-        fqs = nfq
+        fqs = [os.path.abspath(fq) for fq in fqs]
 
     processor = bp.VariantProcessor(variant_callers, normalizers, comparators, JsonReporter(output), conf)
     logging.info("Processing variants in file " + vcf)
     if single_batch:
         logging.info("Processing all variants as one batch")
-        processor.process_batch(vcf, vcf.replace(".vcf", "-tmpfiles"), gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
+        tmp_dir = '{}-tmp'.format(util.strip_extensions(os.path.basename(vcf), ['vcf','gz']))
+        processor.process_batch(vcf, tmp_dir, gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
     else:
         batches = util.batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000)
-        for batchnum, batch_vcf in enumerate(batches):
-            logging.info("Processing batch #" + str(batchnum+1) + " of " + str(len(batches)))
-            processor.process_batch(batch_vcf,  "tmp-{}-batch-{}".format( os.path.basename(vcf).replace(".vcf", ""), batchnum), gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
+        for batchnum, batch_vcf in enumerate(batches, 1):
+            logging.info('Processing batch #{} of {}'.format(batchnum, len(batches)))
+            tmp_dir = '{}-batch{:03d}-tmp'.format(util.strip_extensions(os.path.basename(vcf), ['vcf','gz']), batchnum)
+            processor.process_batch(batch_vcf, tmp_dir, gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
             os.remove(batch_vcf)
 
 def process_test_vcf(orig_vcf, test_vcf, output, conf):
@@ -176,8 +180,9 @@ def main(args):
     conf = cp.SafeConfigParser()
     conf.read(args.conf)
 
-    if type(args.output) is str:
-        args.output = open(args.output, "w")
+    output = sys.stdout
+    if isinstance(args.output, str):
+        output = open(args.output, "w")
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -205,32 +210,28 @@ def main(args):
         if len(args.vcf)>1:
             raise ValueError('Only one VCF supported for now')
         vcf = args.vcf[0]
-        fastq_prefix = vcf.strip(".gz").strip(".vcf")
+        fastq_prefix = util.strip_extensions(vcf, ['vcf','gz'])
         logging.info("Generating reads for vcf file " + vcf)
         suffix = ".d" + str(args.readdepth)
         if gt_default == bam_simulation.ALL_HETS:
             suffix = suffix + ".het"
         elif gt_default == bam_simulation.ALL_HOMS:
             suffix = suffix + ".hom"
-        fastq_prefix = fastq_prefix + suffix
-        gen_reads(vcf, vcf.strip(".gz").strip(".vcf") + suffix + ".truth.vcf", fastq_prefix, snp_inf, gt_default, args.readdepth, conf)
+        fastq_prefix += suffix
+        gen_reads(vcf, fastq_prefix + ".truth.vcf", fastq_prefix, snp_inf, gt_default, args.readdepth, conf)
         return
 
     if args.test_vcf:
         if len(args.vcf) > 1:
             raise ValueError('Only one VCF supported for now')
-        process_test_vcf(args.vcf[0], args.test_vcf, args.output, conf)
+        process_test_vcf(args.vcf[0], args.test_vcf, output, conf)
         return
-
 
     for vcf in args.vcf:
         logging.info("Processing vcf file " + vcf)
-        process_vcf(vcf, gt_default, conf, args.output, args.callers, fqs=args.fqs, snp_info=snp_inf, single_batch=args.batch, keep_tmpdir=args.keep, read_depth=args.readdepth)
+        process_vcf(vcf, gt_default, conf, output, args.callers, fqs=args.fqs, snp_info=snp_inf,
+                         single_batch=args.batch, keep_tmpdir=args.keep, read_depth=args.readdepth)
 
-    try:
-        args.output.close()
-    except:
-        pass
 
 if __name__=="__main__":
     logging.basicConfig(level=logging.INFO,
@@ -239,7 +240,7 @@ if __name__=="__main__":
 
     parser = argparse.ArgumentParser("Inject, simulate, call, compare")
     parser.add_argument("-c", "--conf", help="Path to configuration file", default="./comp.conf")
-    parser.add_argument("-v", "--vcf", help="Input vcf file(s)", nargs="+")
+    parser.add_argument("-v", "--vcf", help="Input vcf file(s)", nargs="+", required=True)
     parser.add_argument("-k", "--keep", help="Dont delete temporary directories", action='store_true')
     parser.add_argument("-b", "--batch", help="Treat each input VCF file as a single batch (default False)", action='store_true')
     parser.add_argument("-s", "--seed", help="Random seed", default=None)

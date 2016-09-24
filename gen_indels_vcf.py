@@ -1,134 +1,130 @@
-
-import argparse
-import intervaltree
-import pysam
-import random
 import sys
+import csv
+import argparse
+import random
+
 from collections import defaultdict
+
+import pysam
+
+from kevinlib.structs import interval_tree
 
 bases = ['A', 'C', 'T', 'G']
 region_margin = 20
 
-def to_region(region_str):
-    toks = region_str.split()
-    start = int(toks[1])+region_margin
-    end = int(toks[2])-region_margin
-    if (end > start):
-        return (toks[0], start, end)
-    else:
-        return None
 
-def read_regions(path):
-    regions = [to_region(r) for r in open(path, "r") if r[0] != '#']
-    return [reg for reg in regions if reg is not None]
+def read_regions(filename):
+    for line in open(filename):
+        toks  = line.split()
+        chrom = toks[0]
+        start = int(toks[1])+region_margin
+        stop  = int(toks[2])-region_margin
+        if stop > start:
+            yield chrom, start, stop
 
-def gen_insertion(ref, chr, location, size):
-    insertion = "".join([random.choice(bases) for _ in range(size)])
-    ref_base = ref.fetch(chr, location, location+1)
-    return "\t".join([chr, str(location+1), ".", ref_base, ref_base + insertion])
 
-def gen_deletion(ref, chr, location, size):
-    ref_bases = ref.fetch(chr, location, location+size+1)
-    alt = ref_bases[0]
-    return "\t".join([chr, str(location+1), ".", ref_bases, alt])
+def gen_insertion(ref, chrom, location, size):
+    insertion = "".join(random.choice(bases) for _ in range(size))
+    ref_base = ref.fetch(chrom, location, location+1)
+    return chrom, str(location+1), ".", ref_base, ref_base + insertion
 
-def gen_duplication(ref, chr, location, size):
-    ref_bases = ref.fetch(chr, location, location+size)
-    alt = ref_bases + ref_bases
-    return "\t".join([chr, str(location+1), ".", ref_bases, alt])
 
-def gen_inverse_dup(ref, chr, location, size):
-    ref_bases = ref.fetch(chr, location, location+size+1)
-    alt = ref_bases + revcomp(ref_bases)
-    return "\t".join([chr, str(location+1), ".", ref_bases, alt])
+def gen_deletion(ref, chrom, location, size):
+    ref_bases = ref.fetch(chrom, location, location+size+1)
+    return chrom, str(location+1), ".", ref_bases, ref_bases[0]
 
-def gen_snp(ref, chr, location, size):
-    ref_bases = ref.fetch(chr, location, location+1)
-    alt = random.choice(bases)
+
+def gen_duplication(ref, chrom, location, size):
+    ref_bases = ref.fetch(chrom, location, location+size)
+    return chrom, str(location+1), ".", ref_bases, ref_bases + ref_bases
+
+
+def gen_inverse_dup(ref, chrom, location, size):
+    # FIXME: The interval arithmetic looks wrong.
+    #        fetch should take half open intervals, so the +1 looks spurious.
+    ref_bases = ref.fetch(chrom, location, location+size+1)
+    return chrom, str(location+1), ".", ref_bases, ref_bases + revcomp(ref_bases)
+
+
+def gen_snp(ref, chrom, location, size):
+    ref_bases = ref.fetch(chrom, location, location+1)
+    alt = ref_bases
     while alt == ref_bases:
         alt = random.choice(bases)
-    return "\t".join([chr, str(location+1), ".", ref_bases, alt])
+    return chrom, str(location+1), ".", ref_bases, alt
 
 
-def gen_blocksub(ref, chr, location, size):
+def gen_blocksub(ref, chrom, location, size):
     """
     Length-preserving variant
     :param ref:
-    :param chr:
+    :param chrom:
     :param location:
     :param size:
     :return:
     """
-    ref_bases = ref.fetch(chr, location, location+size)
+    # FIXME: Each alt base may not match the corresponding ref base.  This
+    # makes easier variants than if inserting truly random sequence, since
+    # the alleles are position-wise distinct.  Perhaps make sure that only
+    # the first and last base are distinct from ref?
+    ref_bases = ref.fetch(chrom, location, location+size)
     alt = ""
     for b in ref_bases:
-        a = random.choice(bases)
+        a = b
         while a==b:
             a = random.choice(bases)
-        alt = alt + a
-    return "\t".join([chr, str(location+1), ".", ref_bases, alt])
+        alt += a
+    return chrom, str(location+1), ".", ref_bases, alt
 
-def gen_ins_mnp(ref, chr, location, size):
-    insertion = "".join([random.choice(bases) for _ in range(size)])
-    ref_base = ref.fetch(chr, location, location+1)
-    alt = random.choice(bases)
+
+def gen_ins_mnp(ref, chrom, location, size):
+    insertion = "".join(random.choice(bases) for _ in range(size))
+    ref_base = ref.fetch(chrom, location, location+1)
+    alt = ref_base
     while alt == ref_base:
         alt = random.choice(bases)
-    return "\t".join([chr, str(location+1), ".", ref_base, ref_base + insertion + "," + ref_base + alt])
+    return chrom, str(location+1), ".", ref_base, ref_base + insertion + "," + ref_base + alt
 
-def gen_del_snp_mnp(ref, chr, location, size):
-    ref_bases = ref.fetch(chr, location, location+size+1)
+
+def gen_del_snp_mnp(ref, chrom, location, size):
+    ref_bases = ref.fetch(chrom, location, location+size+1)
     del_alt = ref_bases[0]
     okbases = ['A', 'C', 'T', 'G']
     okbases.remove(ref_bases[1])
     alt = ref_bases[0] + random.choice(okbases) + ref_bases[2:]
-    return "\t".join([chr, str(location+1), ".", ref_bases, alt + "," + del_alt ])
-
-def pick_location(regions, blacklist=None, min_safe_dist = 2000):
-    region = random.choice(regions)
-    loc = random.randint(region[1], region[2])
-    if blacklist is not None:
-        hits = blacklist[region[0]][loc-min_safe_dist:loc+min_safe_dist]
-        while len(hits)>0:
-            region = random.choice(regions)
-            loc = random.randint(region[1], region[2])
-            hits = blacklist[region[0]][loc-min_safe_dist:loc+min_safe_dist]
-        blacklist[region[0]].addi(loc, loc+1)
+    return chrom, str(location+1), ".", ref_bases, alt + "," + del_alt
 
 
-    return (region[0], loc)
+def pick_location(regions, blacklist, min_safe_dist=2000):
+    chrom, start, stop = random.choice(regions)
+    loc = random.randint(start, stop)
+
+    while (loc-min_safe_dist, loc+min_safe_dist) in blacklist[chrom]:
+        chrom, start, stop = random.choice(regions)
+        loc = random.randint(start, stop)
+    blacklist[chrom].insert(loc, loc+1)
+
+    return chrom, loc
 
 
-
-def generate_all(ref, regions, output):
+def generate(ref, regions, output):
     reps_per_size = 10
-    blacklist = defaultdict(intervaltree.IntervalTree)
+    blacklist = defaultdict(interval_tree.IntervalTree)
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
-    output.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n')
+    output.flush()
+    out = csv.writer(output, delimiter='\t')
+    out.writerow(['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'sample'])
+
+    gen_vars = [gen_deletion, gen_insertion, gen_duplication, gen_blocksub]
+    # gen_del_snp_mnp, gen_snp, gen_inverse_dup
+
     for rep in range(0, reps_per_size):
         for size in [1,2,3,4,5] + range(10, 150, 10):
-            vars = []
-            loc = pick_location(regions, blacklist)
-            vars.append( gen_deletion(ref, loc[0], loc[1], size) )
-
-            loc = pick_location(regions, blacklist)
-            vars.append( gen_insertion(ref, loc[0], loc[1], size) )
-
-            loc = pick_location(regions, blacklist)
-            vars.append(gen_duplication(ref, loc[0], loc[1], size))
-
-            loc = pick_location(regions, blacklist)
-            vars.append(gen_blocksub(ref, loc[0], loc[1], size))
-
-            #var = gen_del_snp_mnp(ref, loc[0], loc[1], size)
-            # var = gen_insertion(ref, loc[0], loc[1], size)
-            # var = gen_snp(ref, loc[0], loc[1], size)
-            # var = gen_duplication(ref, loc[0], loc[1], size)
-            # var = gen_blocksub(ref, loc[0], loc[1], size)
-            #var = gen_inverse_dup(ref, loc[0], loc[1], size)
-            for var in vars:
-                output.write(var + "\t" + "\t".join(['.', '.', '.']) + "\n")
+            for gen_var in gen_vars:
+                loc = pick_location(regions, blacklist)
+                var = gen_var(ref, loc[0], loc[1], size)
+                out.writerow(var + ('.', '.', '.'))
 
 
 def revcomp(bases):
@@ -136,21 +132,17 @@ def revcomp(bases):
     Return reverse-complemented bases, uses the revcomp_lookup global lookup dictionary
     :return: Reverse-complemented bases as a string
     """
-    result = []
     revcomp_lookup={'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G' }
-    for b in bases[::-1]:
-        result.append(revcomp_lookup[b])
-    return "".join(result)
+    return ''.join(revcomp_lookup[b] for b in bases[::-1])
+
 
 if __name__=="__main__":
-    parser = argparse.ArgumentParser("Create a VCF file with many simulated indels")
-    parser.add_argument("-f", "--fasta", help="Reference fasta")
-    parser.add_argument("-r", "--regions", help="Input BED file with target regions")
+    parser = argparse.ArgumentParser(description="Create a VCF file with many simulated indels")
+    parser.add_argument("-f", "--fasta", help="Reference fasta", required=True)
+    parser.add_argument("-r", "--regions", help="Input BED file with target regions", required=True)
     args = parser.parse_args()
 
-    regions = read_regions(args.regions)
+    regions = list(read_regions(args.regions))
     ref = pysam.FastaFile(args.fasta)
 
-    generate_all(ref, regions, sys.stdout)
-
-
+    generate(ref, regions, sys.stdout)

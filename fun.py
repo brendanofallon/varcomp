@@ -1,16 +1,19 @@
-
 import sys
+import itertools as itools
+
+from collections import defaultdict
+
 import pandas as pd
-from vcomp import batch_processor as bp
 import numpy as np
 import seaborn as sns
 from scipy import stats
 import matplotlib.pyplot as plt
-from collections import defaultdict
-import itertools as itools
 
-ALL_CALLERS = ['samtools', 'varscan', 'platypus', 'rtg', 'gatk-hc', 'gatk-ug', 'freebayes', 'freebayes-mre']
-SOME_CALLERS = ['gatk-hc', 'clcbio']
+from vcomp import batch_processor as bp
+
+#ALL_CALLERS = ['samtools', 'varscan', 'platypus', 'rtg', 'gatk-hc', 'gatk-ug', 'freebayes', 'freebayes-mre', 'sentieon-hc']
+ALL_CALLERS = [ 'gatk-hc',  'sentieon-hc']
+SOME_CALLERS = ['gatk-hc', 'sentieon-hc']
 CLCBIO_CALLER = ['clcbio']
 ALL_RESULTS = (bp.MATCH_RESULT, bp.NO_MATCH_RESULT, bp.NO_VARS_FOUND_RESULT, bp.MATCH_WITH_EXTRA_RESULT, bp.ZYGOSITY_MISSING_ALLELE, bp.ZYGOSITY_EXTRA_ALLELE, bp.ERROR_RESULT)
 
@@ -23,7 +26,8 @@ CALLER_SUBS = {
     'freebayes-mre': 'Freebayes 1.0.2',
     'samtools': 'BCFTools 1.3.1',
     'platypus': 'Platypus 0.8',
-    'clcbio': "CLCBio"
+    'clcbio': 'CLCBio',
+    'sentieon-hc' : 'Sentieon HC 201608'
 }
 
 # A simple color palette
@@ -43,6 +47,7 @@ colors = [
 
 CLCBIO="CLCBio"
 GATK_HC="gatk-hc"
+SENTIEON_HC='sentieon-hc'
 RTG="rtg"
 FREEBAYES="freebayes"
 VGRAPH = "vgraph"
@@ -148,6 +153,7 @@ def find_max_F1(data, caller):
             max_recall = recall
     return max_F1, max_qual, max_prec, max_recall
 
+
 def plot_quals(data, callers=ALL_CALLERS):
     normalizer = NO_NORM
     comparator = VGRAPH
@@ -177,7 +183,7 @@ def plot_quals(data, callers=ALL_CALLERS):
         if len(mismatch_quals) > 5:
             sns.distplot(mismatch_quals, ax=ax, label='Incorrect', color='red', kde_kws={'bw': 0.25})
         ax.set_title(CALLER_SUBS[caller])
-        maxqual = max(match_quals)
+        maxqual = max(match_quals) if match_quals.size else 100
         if maxqual>1000:
             ax.set_xlim([0, 1000])
         else:
@@ -200,7 +206,7 @@ def plot_quals(data, callers=ALL_CALLERS):
         print "\t".join([CALLER_SUBS[caller], str(tot), str(len(match_quals)), str(len(mismatch_quals)), "{:.3}".format(qual), "{:.3}".format(prec), "{:.3}".format(recall), "{:.4}".format(max_F1), "{:.5}".format(pval)])
         # plt.axvline(opt_q, linewidth=2.0, color='green')
     plt.tight_layout(h_pad=0.25, w_pad=1.0)
-    plt.show()
+    plt.savefig('quals.pdf')
 
 
 def result_freq(data, callers=ALL_CALLERS):
@@ -308,6 +314,7 @@ def plot_errors(ax, data, callers=ALL_CALLERS, colors=('red', 'orange', 'yellow'
     if show_legend:
         ax.legend(loc=(1.0, 0.7), fontsize='medium')
 
+
 def plot_vartypes(data, callers=ALL_CALLERS):
     fig = plt.figure()
     if len(data) == 1:
@@ -363,8 +370,10 @@ def plot_overall(names, data, callers=ALL_CALLERS):
     plt.tight_layout()
     plt.show()
 
+
 def collect_callers(data):
     return data['caller'].unique()
+
 
 def compute_ms90(data, callers=ALL_CALLERS):
     fig = plt.figure()
@@ -459,15 +468,17 @@ def compute_venn(data, caller, normalizer_a, normalizer_b, comparator_a, compara
     print "Unique B: {}".format(len(uniq_b))
 
 
+
 def main(args):
     data = {}
     for arg in args:
         data[arg] = pd.read_csv(arg, sep='\t')
-    # compute_venn(data[args[0]], 'gatk-ug', NO_NORM, NO_NORM, VCFEVAL, VGRAPH)
-    # compute_ms90(data, callers=collect_callers(data[args[0]]))
-    plot_vartypes(data, callers=collect_callers(data[args[0]]))
-    # plot_overall(args, data, callers=collect_callers(data[args[0]])) # SOME_CALLERS)
-    # plot_quals(data[args[0]])
+
+    #compute_venn(data[args[0]], 'gatk-ug', NO_NORM, NO_NORM, VCFEVAL, VGRAPH)
+    #compute_ms90(data, callers=collect_callers(data[args[0]]))
+    #plot_vartypes(data, callers=collect_callers(data[args[0]]))
+    #plot_overall(args, data, callers=collect_callers(data[args[0]])) # SOME_CALLERS)
+    plot_quals(data[args[0]])
 
 if __name__=="__main__":
     main(sys.argv[1:])
