@@ -164,18 +164,15 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
 
 def vcf_has_no_vars(vcf):
     """ Returns true if the vcf does not contain any variants. This does not use pysam. """
-    if vcf.endswith(".gz"):
-        fh = gzip.open(vcf)
-    else:
-        fh = open(vcf)
 
+    fh = vcomp.util.smartfile(vcf)
     for line in fh:
         if len(line)>1 and line[0] != '#':
             fh.close()
-            return True
+            return False
 
     fh.close()
-    return False
+    return True
 
 def read_all_vars(vcf, bed=None):
     """

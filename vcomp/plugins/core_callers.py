@@ -14,7 +14,7 @@ def get_callers():
         #"rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,
         #"sentieon-hc": call_variant_sentieon_hc,
-        "somaticppl": call_variant_somaticppl,
+        #"somaticppl": call_variant_somaticppl,
 		#"wecall": call_wecall,
         #"gatk-ug": call_variant_gatk_ug
         #"wecall": call_wecall
