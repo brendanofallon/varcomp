@@ -1,7 +1,7 @@
 import os
 import time
 import subprocess
-
+import gzip
 import pysam
 
 import vcomp.util
@@ -15,8 +15,8 @@ ALLELE_EXTRA="Additional variants identified"
 def get_comparators():
     return {
         #"raw": compare_raw,
-        "vgraph": compare_vgraph,
-        #"vcfeval": compare_vcfeval,
+        #"vgraph": compare_vgraph,
+        "vcfeval": compare_vcfeval,
         #"happy": compare_happy
     }
 
@@ -117,7 +117,7 @@ def compare_vcfeval(orig_vcf, caller_vcf, bed, conf):
     cmd = "java -Djava.io.tmpdir=. -Xmx4g -jar " + conf.get('main', 'rtg_jar') + " vcfeval -t " + conf.get('main', 'rtg_ref_sdf') + " --all-records -o " + output_dir + " -b " + orig_vcf + " -c " + caller_vcf
     if bed is not None:
         cmd = cmd + " --bed-regions " + bed
-    subprocess.check_output(cmd, stdout=open('/dev/null'))
+    subprocess.check_output(cmd, shell=True)
     # orig_vars = read_all_vars(orig_vcf, bed)
     tp_vars = read_all_vars(output_dir + "/tp.vcf.gz")
     fp_vars = read_all_vars(output_dir + "/fp.vcf.gz")
@@ -162,6 +162,21 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
     return (orig_unmatched, matches, caller_unmatched)
 
 
+def vcf_has_no_vars(vcf):
+    """ Returns true if the vcf does not contain any variants. This does not use pysam. """
+    if vcf.endswith(".gz"):
+        fh = gzip.open(vcf)
+    else:
+        fh = open(vcf)
+
+    for line in fh:
+        if len(line)>1 and line[0] != '#':
+            fh.close()
+            return True
+
+    fh.close()
+    return False
+
 def read_all_vars(vcf, bed=None):
     """
     Try to read all the variants from the given vcf file into a list. If there's an error
@@ -170,6 +185,8 @@ def read_all_vars(vcf, bed=None):
     :param bed:If not none, only read variants in these regions
     :return:
     """
+    if vcf_has_no_vars(vcf):
+        return []
     if bed is None:
         vars = list(pysam.VariantFile(vcf))
     else:

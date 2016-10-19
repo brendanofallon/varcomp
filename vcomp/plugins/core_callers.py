@@ -13,8 +13,9 @@ def get_callers():
         #platypus-asm": call_variant_platypus_asm,
         #"rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,
-        "sentieon-hc": call_variant_sentieon_hc,
-        #"wecall": call_wecall,
+        #"sentieon-hc": call_variant_sentieon_hc,
+        "somaticppl": call_variant_somaticppl,
+		#"wecall": call_wecall,
         #"gatk-ug": call_variant_gatk_ug
         #"wecall": call_wecall
         #"freebayes-mre": call_variant_fb_minrepeatentropy,
@@ -80,6 +81,11 @@ def call_variant_sentieon_hc(bam, genome, bed, conf=None):
     subprocess.check_call(cmd, stdout=open('/dev/null'), stderr=subprocess.STDOUT, shell=True)
     return util.compress_vcf(vcfoutput, conf)
 
+def call_variant_somaticppl(bam, genome, bed, conf=None):
+	vcfoutput = "output-somaticppl.vcf"
+	cmd = '''{somaticcaller} {genome} {bed} {bam} {output}'''.format(somaticcaller=conf.get('main', 'somaticppl_path'), bam=bam, genome=genome, bed=bed, output=vcfoutput)
+	subprocess.check_call(cmd, shell=True)
+	return util.compress_vcf(vcfoutput, conf)
 
 def call_variant_gatk_ug(bam, genome, bed, conf=None):
     vcfoutput = "output-ug.vcf"

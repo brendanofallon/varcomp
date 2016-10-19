@@ -193,13 +193,15 @@ def find_qual(vars):
     qual = MISSING_QUAL
     if vars is None or len(vars)==0:
         return qual
-
-    var = vars[0]
-    if var.qual is None:
-        if 'GQ' in var:
-            qual = var.samples[0]['GQ']
-    else:
-        qual = var.qual
+    try:
+        var = vars[0]
+        if var.qual is None:
+            if 'GQ' in var:
+                qual = var.samples[0]['GQ']
+        else:
+            qual = var.qual
+    except Exception:
+        pass
 
     return qual
 

@@ -16,8 +16,8 @@ def normalize_nothing(orig_vcf, conf):
     """
     Just copy the original vcf to a new, identical vcf file.
     """
-    new_vcf = util.strip_extensions(orig_vcf, ['vcf']) + '.nonorm.vcf'
-    cmd = 'cp {orig} {new}'.format(orig_vcf, new_ncf)
+    new_vcf = orig_vcf.replace(".vcf", ".nonorm.vcf")
+    cmd = 'cp {} {}'.format(orig_vcf, new_vcf)
     subprocess.check_call(cmd, shell=True)
     return util.bgz_tabix(new_vcf, conf)
 

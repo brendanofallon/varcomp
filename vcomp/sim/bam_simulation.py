@@ -86,8 +86,8 @@ def generate_reads(alt_genome, chrom, pos, read_count=250, prefix="test-reads", 
 
 def create_bam(ref_genome, reads1, reads2, bwapath, samtoolspath):
     dest = reads1.replace("_R1.fq", "") + ".bam"
-    cmd = '''{bwa} mem -I 150,30 -R "@RG\\tID:test\\tSM:sample\\tPL:Illumina" {ref} {reads1} {reads2} 2> /dev/null |
-             {samtools} sort -T sorttmp -O bam > {bam} 2> /dev/null;
+    cmd = '''{bwa} mem -I 150,30 -R "@RG\\tID:test\\tSM:sample\\tPL:Illumina" {ref} {reads1} {reads2} |
+             {samtools} sort -T sorttmp -O bam > {bam};
              {samtools} index {bam}'''.format(bwa=bwapath, ref=ref_genome, reads1=reads1, reads2=reads2,
                                               samtools=samtoolspath, bam=dest)
     subprocess.check_call(cmd, shell=True)

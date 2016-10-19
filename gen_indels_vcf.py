@@ -6,8 +6,7 @@ import random
 from collections import defaultdict
 
 import pysam
-
-from kevinlib.structs import interval_tree
+import intervaltree
 
 bases = ['A', 'C', 'T', 'G']
 region_margin = 20
@@ -102,25 +101,25 @@ def pick_location(regions, blacklist, min_safe_dist=2000):
     while (loc-min_safe_dist, loc+min_safe_dist) in blacklist[chrom]:
         chrom, start, stop = random.choice(regions)
         loc = random.randint(start, stop)
-    blacklist[chrom].insert(loc, loc+1)
+    blacklist[chrom].addi(loc, loc+1)
 
     return chrom, loc
 
 
 def generate(ref, regions, output):
-    reps_per_size = 10
-    blacklist = defaultdict(interval_tree.IntervalTree)
+    reps_per_size = 1
+    blacklist = defaultdict(intervaltree.IntervalTree)
     output.write("##fileformat=VCFv4.1\n")
     output.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
     output.flush()
     out = csv.writer(output, delimiter='\t')
     out.writerow(['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', 'sample'])
 
-    gen_vars = [gen_deletion, gen_insertion, gen_duplication, gen_blocksub]
+    gen_vars = [gen_deletion] #, gen_insertion, gen_duplication, gen_blocksub]
     # gen_del_snp_mnp, gen_snp, gen_inverse_dup
 
     for rep in range(0, reps_per_size):
-        for size in [1,2,3,4,5] + range(10, 150, 10):
+        for size in [10]: # [1,2,3,4,5] + range(10, 150, 10):
             for gen_var in gen_vars:
                 loc = pick_location(regions, blacklist)
                 var = gen_var(ref, loc[0], loc[1], size)

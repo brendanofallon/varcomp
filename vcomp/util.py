@@ -3,12 +3,11 @@ import random
 import string
 import subprocess
 import traceback as tb
-
+import gzip
 from collections import namedtuple
 
 import pysam
 
-from kevinlib.core.smartfile import smartfile
 
 ALL_HOMREF_GTS = ["0/0", "0|0"]
 ALL_HET_GTS = ["0/1", "1/0", "1|0", "0|1", "1/2", "2/1", "1|2", "2|1"]
@@ -78,7 +77,7 @@ def sort_vcf(vcf, conf):
     vars = []
     ofh = open(tmpfile, "w")
 
-    for line in smartfile(vcf):
+    for line in smartfile(fh):
         if line.startswith('#'):
             ofh.write(line)
         else:
@@ -136,6 +135,7 @@ def set_genotypes(orig_vcf, newGT, region, conf, compress_result=True):
     # FIXME: Update to use pysam.VariantFile
     newvcf = '{}.gtmod.{}.vcf'.format(strip_extensions(orig_vcf, ['gz','vcf']), randstr())
     ofh = open(newvcf, 'w')
+
     for line in smartfile(orig_vcf):
         if line.startswith('#'):
             ofh.write(line)
@@ -446,6 +446,11 @@ class TempDir(object):
                 or (self.deletion_policy == TempDir.DELETE_NO_EXCEPTION and exc_val is None):
             os.system("rm -rf " + self.dirname)
 
+def smartfile(path, mode="r"):
+    if path.endswith(".gz"):
+        return gzip.open(path, mode)
+    else:
+        return open(path, mode)
 
 if __name__ == '__main__':
     import doctest
