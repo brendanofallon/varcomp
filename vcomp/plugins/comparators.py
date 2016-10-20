@@ -162,18 +162,6 @@ def compare_happy(orig_vcf, caller_vcf, bed, conf):
     return (orig_unmatched, matches, caller_unmatched)
 
 
-def vcf_has_no_vars(vcf):
-    """ Returns true if the vcf does not contain any variants. This does not use pysam. """
-
-    fh = vcomp.util.smartfile(vcf)
-    for line in fh:
-        if len(line)>1 and line[0] != '#':
-            fh.close()
-            return False
-
-    fh.close()
-    return True
-
 def read_all_vars(vcf, bed=None):
     """
     Try to read all the variants from the given vcf file into a list. If there's an error
@@ -182,7 +170,7 @@ def read_all_vars(vcf, bed=None):
     :param bed:If not none, only read variants in these regions
     :return:
     """
-    if vcf_has_no_vars(vcf):
+    if vcomp.util.is_empty(vcf):
         return []
     if bed is None:
         vars = list(pysam.VariantFile(vcf))
