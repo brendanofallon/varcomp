@@ -13,6 +13,7 @@ def get_callers():
         #platypus-asm": call_variant_platypus_asm,
         #"rtg": call_variant_rtg,
         "gatk-hc": call_variant_gatk_hc,
+        "gatk-hc-somatic": call_variant_gatk_hc_somatic,
         #"sentieon-hc": call_variant_sentieon_hc,
         #"somaticppl": call_variant_somaticppl,
 		#"wecall": call_wecall,
@@ -68,6 +69,16 @@ def call_variant_gatk_hc(bam, genome, bed, conf=None):
 
     cmd='''java -Xmx1g -Djava.io.tmpdir=. -jar {gatk} -T HaplotypeCaller -R {genome} -I {bam} -U ALLOW_SEQ_DICT_INCOMPATIBILITY \
            -L {bed} -o {vcfoutput}'''
+    cmd = cmd.format(gatk=conf.get('main', 'gatk'), genome=genome, bam=bam, bed=bed, vcfoutput=vcfoutput)
+
+    subprocess.check_call(cmd, stdout=open('/dev/null'), stderr=subprocess.STDOUT, shell=True)
+    return util.compress_vcf(vcfoutput, conf)
+
+def call_variant_gatk_hc_somatic(bam, genome, bed, conf=None):
+    vcfoutput = "output-hc-somatic.vcf"
+
+    cmd='''java -Xmx1g -Djava.io.tmpdir=. -jar {gatk} -T HaplotypeCaller -R {genome} -I {bam} -U ALLOW_SEQ_DICT_INCOMPATIBILITY \
+           -L {bed} -o {vcfoutput} -ploidy 20'''
     cmd = cmd.format(gatk=conf.get('main', 'gatk'), genome=genome, bam=bam, bed=bed, vcfoutput=vcfoutput)
 
     subprocess.check_call(cmd, stdout=open('/dev/null'), stderr=subprocess.STDOUT, shell=True)

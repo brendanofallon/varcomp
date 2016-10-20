@@ -71,6 +71,7 @@ def generate_reads(alt_genome, chrom, pos, read_count=250, prefix="test-reads", 
         read2_fh = open(r2_filename, "w")
         close2 = True
 
+    read_count = max(1, int(read_count))
     for x in range(read_count):
         (a, b) = generator.gen_read_pair()
         read1_fh.write(a + "\n")
@@ -178,7 +179,7 @@ def collect_alts(vset):
     return hap1, hap2
 
 
-def gen_alt_fq(ref, variant_sets, read_count, dest_prefix="input"):
+def gen_alt_fq(ref, variant_sets, read_count, dest_prefix="input", hetfreq=0.5):
     """
     Generate a batch of simulated reads independently for the variants in each variant_set
     Each set contains a list of variants and a policy describing cis / trans configuration
@@ -199,13 +200,13 @@ def gen_alt_fq(ref, variant_sets, read_count, dest_prefix="input"):
 
         alt_genome = 'alt_genome' + util.randstr() + '.fa'
         alt_genome_size = gen_alt_genome(chrom, hap1, ref, alt_genome, overwrite=True)
-        generate_reads(alt_genome, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
+        generate_reads(alt_genome, chrom, alt_genome_size / 2, read_count=read_count * hetfreq, read1_fh=read1_fh, read2_fh=read2_fh)
         os.remove(alt_genome)
         os.remove(alt_genome + ".fai")
 
         alt_genome = 'alt_genome' + util.randstr() + '.fa'
         alt_genome_size = gen_alt_genome(chrom, hap2, ref, alt_genome, overwrite=True)
-        generate_reads(alt_genome, chrom, alt_genome_size / 2, read_count=read_count / 2, read1_fh=read1_fh, read2_fh=read2_fh)
+        generate_reads(alt_genome, chrom, alt_genome_size / 2, read_count=read_count * (1.0-hetfreq), read1_fh=read1_fh, read2_fh=read2_fh)
         os.remove(alt_genome)
         os.remove(alt_genome + ".fai")
 
@@ -238,7 +239,6 @@ def verify_reads(fq1, fq2, bam, conf):
     r1 = len([line for line in open(fq1, "r") if line.strip()=='+'])
     r2 = len([line for line in open(fq2, "r") if line.strip()=='+'])
     cmd = [conf.get('main', 'samtools'), "flagstat", bam]
-    time.sleep(1)
     info = subprocess.check_output(cmd)
     tot_line = info.split('\n')[0]
     bc = int(tot_line.split(' ')[0])

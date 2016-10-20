@@ -51,7 +51,7 @@ class JsonReporter(object):
             self.output.write("\n")
 
 
-def gen_reads(vcf, dest_vcf, dest_fq_prefix, ex_snp, gt_policy, read_depth, conf):
+def gen_reads(vcf, dest_vcf, dest_fq_prefix, ex_snp, gt_policy, read_depth, conf, varfreq=0.5):
     """
     Generate fastqs for the given set of input variants. This code is fired when the user supplies the --generate-fqs
     arg, and closely mimics the fastq generation code in VariantProcessor
@@ -76,7 +76,7 @@ def gen_reads(vcf, dest_vcf, dest_fq_prefix, ex_snp, gt_policy, read_depth, conf
     variant_batch = sorted(allvars, cmp=util.variant_comp)
     final_vcf = util.write_vcf(variant_batch, dest_vcf, conf)
     logging.info("Writing full VCF to " + final_vcf)
-    reads = bam_simulation.gen_alt_fq(conf.get('main', 'ref_genome'), variant_sets, read_depth, dest_prefix=dest_fq_prefix)
+    reads = bam_simulation.gen_alt_fq(conf.get('main', 'ref_genome'), variant_sets, read_depth, dest_prefix=dest_fq_prefix, hetfreq=varfreq)
     logging.info("Writing fastqs to " + reads[0] + ", " + reads[1])
 
 
@@ -120,7 +120,17 @@ def load_components(conf, section, callable_name):
     return components
 
 
-def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None, single_batch=False, keep_tmpdir=False, read_depth=250):
+def process_vcf(vcf,
+                gt_default,
+                conf,
+                output,
+                callers,
+                fqs=None,
+                snp_info=None,
+                single_batch=False,
+                keep_tmpdir=False,
+                read_depth=250,
+                varfreq=0.5):
     """
     Perform analyses for each variant in the VCF file.
     :param input_vcf: Path to vcf file containing variants to process
@@ -154,13 +164,13 @@ def process_vcf(vcf, gt_default, conf, output, callers, fqs=None, snp_info=None,
     if single_batch:
         logging.info("Processing all variants as one batch")
         tmp_dir = '{}-tmp'.format(util.strip_extensions(os.path.basename(vcf), ['vcf','gz']))
-        processor.process_batch(vcf, tmp_dir, gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
+        processor.process_batch(vcf, tmp_dir, gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs, hetfreq=varfreq)
     else:
         batches = util.batch_variants(vcf, max_batch_size=1000, min_safe_dist=2000)
         for batchnum, batch_vcf in enumerate(batches, 1):
             logging.info('Processing batch #{} of {}'.format(batchnum, len(batches)))
             tmp_dir = '{}-batch{:03d}-tmp'.format(util.strip_extensions(os.path.basename(vcf), ['vcf','gz']), batchnum)
-            processor.process_batch(batch_vcf, tmp_dir, gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs)
+            processor.process_batch(batch_vcf, tmp_dir, gt_default, ex_snp=snp_info, keep_tmpdir=keep_tmpdir, read_depth=read_depth, reads=fqs, hetfreq=varfreq)
             os.remove(batch_vcf)
 
 def process_test_vcf(orig_vcf, test_vcf, output, conf):
@@ -218,7 +228,7 @@ def main(args):
         elif gt_default == bam_simulation.ALL_HOMS:
             suffix = suffix + ".hom"
         fastq_prefix += suffix
-        gen_reads(vcf, fastq_prefix + ".truth.vcf", fastq_prefix, snp_inf, gt_default, args.readdepth, conf)
+        gen_reads(vcf, fastq_prefix + ".truth.vcf", fastq_prefix, snp_inf, gt_default, args.readdepth, conf, varfreq=args.var_freq)
         return
 
     if args.test_vcf:
@@ -230,7 +240,7 @@ def main(args):
     for vcf in args.vcf:
         logging.info("Processing vcf file " + vcf)
         process_vcf(vcf, gt_default, conf, output, args.callers, fqs=args.fqs, snp_info=snp_inf,
-                         single_batch=args.batch, keep_tmpdir=args.keep, read_depth=args.readdepth)
+                         single_batch=args.batch, keep_tmpdir=args.keep, read_depth=args.readdepth, varfreq=args.var_freq)
 
 
 if __name__=="__main__":
@@ -255,6 +265,7 @@ if __name__=="__main__":
     parser.add_argument("--fqs", help="Dont generate fastqs, use these instead (two entries expected)", action='append')
     parser.add_argument("--generate-fqs", help="Generate fastqs only, do not perform any variant calling or comparison", action='store_true')
     parser.add_argument("--test-vcf", help="Compare an already-called VCF file the input VCF")
+    parser.add_argument("--var-freq", help="Variant frequency (EXPERIMENTAL)", type=float)
     args = parser.parse_args()
 
     main(args)

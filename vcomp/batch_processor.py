@@ -74,12 +74,15 @@ class VariantProcessor(object):
         for region in util.read_regions(bed):
             key = var_key(util.find_matching_var(orig_vcf, region))
             for caller in caller_vars:
-                with pysam.VariantFile(caller_vars[caller]) as cvars:
-                    cvar = util.find_matching_var(cvars, region)
-                    var_quals[key][caller] = find_qual(cvar)
+                if util.is_empty(caller_vars[caller]):
+                    var_quals[key][caller] = MISSING_QUAL
+                else:
+                    with pysam.VariantFile(caller_vars[caller]) as cvars:
+                        cvar = util.find_matching_var(cvars, region)
+                        var_quals[key][caller] = find_qual(cvar)
         return var_quals
 
-    def process_batch(self, vcf, batchname, gt_policy, ex_snp=None, keep_tmpdir=False, read_depth=250, reads=None):
+    def process_batch(self, vcf, batchname, gt_policy, ex_snp=None, keep_tmpdir=False, read_depth=250, reads=None, hetfreq=0.5):
         """
         Process the given batch of variants by creating a fake 'genome' with the variants, simulating reads from it,
          aligning the reads to make a bam file, then using different callers, variant normalizers, and variant
@@ -104,7 +107,7 @@ class VariantProcessor(object):
             orig_vcf, variant_sets = self.create_input_vcf(raw_vars, ex_snp, gt_policy)
             bed = util.vars_to_bed(variant_sets)
             if reads is None:
-                reads = bam_simulation.gen_alt_fq(ref_path, variant_sets, read_depth)
+                reads = bam_simulation.gen_alt_fq(ref_path, variant_sets, read_depth, hetfreq=hetfreq)
             bam = bam_simulation.gen_alt_bam(ref_path, self.conf, reads)
 
             caller_variants = self.call_variants(bam, bed)
