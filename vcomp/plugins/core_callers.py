@@ -82,7 +82,8 @@ def call_variant_gatk_hc_somatic(bam, genome, bed, conf=None):
     cmd = cmd.format(gatk=conf.get('main', 'gatk'), genome=genome, bam=bam, bed=bed, vcfoutput=vcfoutput)
 
     subprocess.check_call(cmd, stdout=open('/dev/null'), stderr=subprocess.STDOUT, shell=True)
-    return util.compress_vcf(vcfoutput, conf)
+
+    return util.set_genotypes(vcfoutput, "0/1", bed, conf)
 
 
 def call_variant_sentieon_hc(bam, genome, bed, conf=None):
